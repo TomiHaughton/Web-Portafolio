@@ -5,38 +5,37 @@ import pandas as pd
 import yfinance as yf
 import plotly.express as px
 
-# --- VERIFICADOR DE SESIÓN ---
-# Este bloque va al principio de cada página para protegerla.
+# --- VERIFICADOR Y CSS (sin cambios) ---
 if 'user' not in st.session_state or st.session_state.user is None:
     st.error("Debes iniciar sesión para acceder a esta página.")
-    st.stop() # Detiene la ejecución si el usuario no ha iniciado sesión.
-
-# Obtenemos el ID del usuario que ha iniciado sesión para usarlo en las consultas
+    st.stop()
 USER_ID = st.session_state.user[0]
-
-# --- INYECCIÓN DE CSS (sin cambios) ---
 st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
 
-# --- FUNCIONES (ACTUALIZADAS PARA USAR user_id) ---
+# --- FUNCIONES ---
 def conectar_db():
     return sqlite3.connect('portfolio.db')
-
-# ACTUALIZADA: Acepta user_id para asociar la operación al usuario
+# ... (funciones ver_operaciones, obtener_aportaciones_retiros, obtener_precios_actuales, calcular_posiciones, etc. sin cambios)
 def anadir_operacion(fecha, ticker, tipo, cantidad, precio, user_id):
     conexion = conectar_db()
     cursor = conexion.cursor()
     cursor.execute("INSERT INTO operaciones (fecha, ticker, tipo, cantidad, precio, user_id) VALUES (?, ?, ?, ?, ?, ?)", (fecha, ticker, tipo, cantidad, precio, user_id))
     conexion.commit()
     conexion.close()
-
-# ACTUALIZADA: Filtra las operaciones por user_id
+    
+# *** NUEVA FUNCIÓN PARA ELIMINAR OPERACIONES ***
+def eliminar_operacion(operacion_id, user_id):
+    conexion = conectar_db()
+    cursor = conexion.cursor()
+    cursor.execute("DELETE FROM operaciones WHERE id = ? AND user_id = ?", (operacion_id, user_id))
+    conexion.commit()
+    conexion.close()
+# ... (El resto de funciones siguen aquí)
 def ver_operaciones(user_id):
     conexion = conectar_db()
     df = pd.read_sql_query("SELECT * FROM operaciones WHERE user_id = ? ORDER BY fecha ASC", conexion, params=(user_id,))
     conexion.close()
     return df
-
-# ACTUALIZADA: Filtra las aportaciones/retiros por user_id
 def obtener_aportaciones_retiros(user_id):
     try:
         conexion = conectar_db()
@@ -47,15 +46,12 @@ def obtener_aportaciones_retiros(user_id):
         return total_aportado, total_retirado
     except:
         return 0, 0
-
-# (El resto de funciones de cálculo no necesitan cambiar, ya que operan sobre los datos ya filtrados)
 @st.cache_data(ttl=600)
 def obtener_precios_actuales(tickers):
     if not tickers: return {}
     data = yf.Tickers(tickers).history(period='1d')
     precios = data['Close'].iloc[-1].to_dict()
     return precios
-
 def calcular_posiciones(df_ops):
     if df_ops.empty: return pd.DataFrame(), 0, pd.DataFrame()
     df = df_ops.copy()
@@ -106,21 +102,18 @@ def calcular_evolucion_patrimonio(df_ops):
             patrimonio_diario[ticker] = 0
     patrimonio_diario['Total'] = patrimonio_diario.sum(axis=1)
     return patrimonio_diario[['Total']].reset_index().rename(columns={'index': 'Fecha'})
-
 def estilo_ganancia(val):
     if pd.isna(val) or val == 0: return 'color: inherit; background-color: transparent;'
     if val > 0: return 'background-color: rgba(40, 167, 69, 0.4); color: #111;'
     else: return 'background-color: rgba(220, 53, 69, 0.4); color: #111;'
 
-# --- INTERFAZ DE LA APLICACIÓN ---
-st.set_page_config(layout="wide", page_title="Dashboard de Inversiones")
-st.title(f"Dashboard de {st.session_state.user[1]} 📊") # Personalizamos el título
-
-# ACTUALIZADO: Pasamos el USER_ID a las funciones que leen la base de datos
+# --- INTERFAZ ---
+st.set_page_config(layout="wide", page_title="Dashboard")
+st.title(f"Dashboard de {st.session_state.user[1]} 📊")
 operaciones_df = ver_operaciones(USER_ID)
 posiciones_df, ganancia_realizada_total, _ = calcular_posiciones(operaciones_df)
 total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID)
-
+# ... (código del Resumen General y Análisis Visual sin cambios) ...
 st.header("Resumen General")
 if not operaciones_df.empty:
     valor_total_portafolio = posiciones_df['valor_mercado'].sum() if 'valor_mercado' in posiciones_df.columns else 0
@@ -128,14 +121,12 @@ if not operaciones_df.empty:
     beneficio_total = ganancia_no_realizada_total + ganancia_realizada_total
     capital_neto_aportado = total_aportado - total_retirado
     rentabilidad = (beneficio_total / capital_neto_aportado) * 100 if capital_neto_aportado > 0 else 0
-    
     st.subheader("Resultados del Portafolio")
     row1_cols = st.columns(4)
     row1_cols[0].metric("Patrimonio Total", f"${valor_total_portafolio:,.2f}")
     row1_cols[1].metric("Beneficio Total", f"${beneficio_total:,.2f}")
     row1_cols[2].metric("Capital Neto Invertido", f"${capital_neto_aportado:,.2f}")
     row1_cols[3].metric("Rentabilidad Total", f"{rentabilidad:.2f}%", delta_color="off")
-
     st.subheader("Componentes")
     row2_cols = st.columns(4)
     row2_cols[0].metric("Beneficio No Realizado", f"${ganancia_no_realizada_total:,.2f}")
@@ -163,12 +154,13 @@ with col_graf2:
         st.info("Añade operaciones para ver la evolución de tu patrimonio.")
 
 st.divider()
-st.header("Añadir Nueva Operación")
+
 with st.form("operacion_form", clear_on_submit=True):
+    st.header("Añadir Nueva Operación")
     col1, col2, col3 = st.columns(3)
     with col1:
         fecha_op = st.date_input("Fecha", value=date.today())
-        ticker_op = st.text_input("Ticker (ej. AAPL, GOOGL)")
+        ticker_op = st.text_input("Ticker (ej. AAPL, BTC)")
     with col2:
         tipo_op = st.selectbox("Tipo de Operación", ["Compra", "Venta"])
         cantidad_op = st.number_input("Cantidad", min_value=0.0, step=0.01, format="%.2f")
@@ -179,11 +171,15 @@ with st.form("operacion_form", clear_on_submit=True):
         if not ticker_op or cantidad_op <= 0 or precio_op <= 0:
             st.warning("Por favor, completa todos los campos correctamente.")
         else:
-            # ACTUALIZADO: Pasamos el USER_ID al guardar la operación
-            anadir_operacion(fecha_op, ticker_op.upper(), tipo_op, cantidad_op, precio_op, USER_ID)
-            st.success(f"¡Operación de {tipo_op} para {ticker_op.upper()} añadida con éxito!")
+            ticker_final = ticker_op.upper()
+            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB"]
+            if ticker_final in criptos_comunes:
+                ticker_final = f"{ticker_final}-USD"
+            anadir_operacion(fecha_op, ticker_final, tipo_op, cantidad_op, precio_op, USER_ID)
+            st.success(f"¡Operación de {tipo_op} para {ticker_final} añadida con éxito!")
             st.rerun()
 
+# ... (código de la tabla Posiciones Actuales sin cambios) ...
 st.header("Posiciones Actuales")
 if posiciones_df.empty:
     st.info("No tienes posiciones abiertas.")
@@ -191,9 +187,32 @@ else:
     df_display = posiciones_df[['ticker', 'cantidad_total', 'precio_promedio_compra', 'precio_actual', 'valor_mercado', 'ganancia_no_realizada', 'rentabilidad_%']].rename(columns={'ticker': 'Ticker', 'cantidad_total': 'Cantidad', 'precio_promedio_compra': 'Precio Compra Prom.', 'precio_actual': 'Precio Actual', 'valor_mercado': 'Valor de Mercado', 'ganancia_no_realizada': 'Ganancia/Pérdida', 'rentabilidad_%': 'Rentabilidad %'})
     st.dataframe(df_display.style.applymap(estilo_ganancia, subset=['Ganancia/Pérdida']).format({'Precio Compra Prom.': '${:,.2f}', 'Precio Actual': '${:,.2f}', 'Valor de Mercado': '${:,.2f}', 'Ganancia/Pérdida': '${:,.2f}', 'Rentabilidad %': '{:,.2f}%'}, na_rep="-").set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
 
+# *** CAMBIO: Modificamos la tabla de Historial para añadir botones de eliminar ***
 st.header("Historial de Operaciones")
 if operaciones_df.empty:
     st.info("Aún no has añadido ninguna operación.")
 else:
     df_historial = operaciones_df.sort_values(by="fecha", ascending=False).rename(columns={'id': 'ID', 'fecha': 'Fecha', 'ticker': 'Ticker', 'tipo': 'Tipo', 'cantidad': 'Cantidad', 'precio': 'Precio'})
-    st.dataframe(df_historial.style.set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
+    
+    # Creamos las columnas para la tabla manual
+    column_widths = [0.5, 1, 1, 0.8, 1, 1, 0.5]
+    cols = st.columns(column_widths)
+    headers = ["ID", "Fecha", "Ticker", "Tipo", "Cantidad", "Precio", "Acción"]
+    for col, header in zip(cols, headers):
+        col.markdown(f"**{header}**")
+
+    st.divider()
+
+    # Iteramos sobre los datos para mostrar cada fila con su botón
+    for index, row in df_historial.iterrows():
+        cols = st.columns(column_widths)
+        cols[0].write(row['ID'])
+        cols[1].write(row['Fecha'])
+        cols[2].write(row['Ticker'])
+        cols[3].write(row['Tipo'])
+        cols[4].write(row['Cantidad'])
+        cols[5].write(f"${row['Precio']:,.2f}")
+        # El botón de eliminar necesita una 'key' única
+        if cols[6].button("🗑️", key=f"del_op_{row['ID']}"):
+            eliminar_operacion(row['ID'], USER_ID)
+            st.rerun()

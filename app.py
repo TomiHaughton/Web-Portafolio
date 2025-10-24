@@ -2,19 +2,15 @@ import streamlit as st
 import sqlite3
 import hashlib
 
-# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Portfolio App Login", layout="centered")
 
 # --- FUNCIONES DE BASE DE DATOS Y USUARIOS (sin cambios) ---
 def conectar_db():
     return sqlite3.connect('portfolio.db')
-
 def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
 def verify_password(password, hashed_password):
     return hash_password(password) == hashed_password
-
 def anadir_usuario(username, password):
     conexion = conectar_db()
     cursor = conexion.cursor()
@@ -26,7 +22,6 @@ def anadir_usuario(username, password):
         return False
     finally:
         conexion.close()
-
 def obtener_usuario(username):
     conexion = conectar_db()
     cursor = conexion.cursor()
@@ -49,36 +44,31 @@ def ocultar_pagina(nombre_pagina):
         </style>
     """, unsafe_allow_html=True)
 
-# *** LÓGICA DE VISIBILIDAD CORREGIDA ***
-if st.session_state.user is None:
-    # Si nadie ha iniciado sesión, ocultamos todas las páginas
+# Lógica principal de visibilidad
+if st.session_state.user:
+    es_admin = st.session_state.user[3]
+    if es_admin == 0:
+        ocultar_pagina("Admin")
+        # HEMOS ELIMINADO EL CÓDIGO QUE OCULTABA EL MENÚ AQUÍ
+else:
     ocultar_pagina("Dashboard")
     ocultar_pagina("Watchlist")
     ocultar_pagina("Ingresos_y_Gastos")
     ocultar_pagina("Análisis_Gráfico")
     ocultar_pagina("Admin")
-else:
-    # Si hay un usuario logueado, verificamos si es admin
-    # st.session_state.user[3] es la columna 'is_admin' que es 0 (no admin) o 1 (sí admin)
-    es_admin = st.session_state.user[3]
-    if es_admin == 0: # Si es 0, significa que NO es admin
-        ocultar_pagina("Admin")
-
+    # Y TAMBIÉN LO HEMOS ELIMINADO DE AQUÍ
+    
 # --- INTERFAZ ---
 if st.session_state.user:
     st.title(f"¡Bienvenido, {st.session_state.user[1]}! 👋")
     st.sidebar.info(f"Sesión iniciada como: **{st.session_state.user[1]}**")
-    
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.user = None
         st.rerun()
-    
     st.markdown("👈 **Selecciona una página en la barra lateral** para empezar.")
-
 else:
     st.title("Bienvenido a tu App de Portafolio")
     col1, col2 = st.columns(2)
-    # ... (formularios de login y registro sin cambios) ...
     with col1:
         with st.form("login_form"):
             st.subheader("Iniciar Sesión")
