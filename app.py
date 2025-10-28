@@ -5,6 +5,7 @@ import hashlib
 st.set_page_config(page_title="Portfolio App Login", layout="centered")
 
 # --- FUNCIONES DE BASE DE DATOS Y USUARIOS (sin cambios) ---
+# ... (código sin cambios) ...
 def conectar_db():
     return sqlite3.connect('portfolio.db')
 def hash_password(password):
@@ -49,16 +50,17 @@ if st.session_state.user:
     es_admin = st.session_state.user[3]
     if es_admin == 0:
         ocultar_pagina("Admin")
-        # HEMOS ELIMINADO EL CÓDIGO QUE OCULTABA EL MENÚ AQUÍ
 else:
+    # *** CAMBIO: Añadimos "Dividendos" a la lista ***
     ocultar_pagina("Dashboard")
     ocultar_pagina("Watchlist")
     ocultar_pagina("Ingresos_y_Gastos")
     ocultar_pagina("Análisis_Gráfico")
     ocultar_pagina("Admin")
-    # Y TAMBIÉN LO HEMOS ELIMINADO DE AQUÍ
-    
-# --- INTERFAZ ---
+    ocultar_pagina("Dividendos") # <-- AÑADIDO
+
+# --- INTERFAZ (sin cambios) ---
+# ... (El resto del código de login y bienvenida es el mismo) ...
 if st.session_state.user:
     st.title(f"¡Bienvenido, {st.session_state.user[1]}! 👋")
     st.sidebar.info(f"Sesión iniciada como: **{st.session_state.user[1]}**")
