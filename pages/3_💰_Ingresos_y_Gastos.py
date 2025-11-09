@@ -4,47 +4,136 @@ import pandas as pd
 from datetime import date
 import plotly.express as px
 
-# --- VERIFICADOR DE SESIÓN y CSS (sin cambios) ---
+# --- VERIFICADOR DE SESIÓN y CSS ---
 if 'user' not in st.session_state or st.session_state.user is None:
     st.error("Debes iniciar sesión para acceder a esta página.")
     st.stop()
 USER_ID = st.session_state.user[0]
 st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
 
-# --- FUNCIONES (sin cambios) ---
-# ...
+# --- FUNCIONES ---
 def conectar_db():
     return sqlite3.connect('portfolio.db')
+
 def anadir_flujo(fecha, tipo, categoria, monto, descripcion, user_id):
     conexion = conectar_db()
     cursor = conexion.cursor()
     cursor.execute("INSERT INTO finanzas_personales (fecha, tipo, categoria, monto, descripcion, user_id) VALUES (?, ?, ?, ?, ?, ?)", (fecha, tipo, categoria, monto, descripcion, user_id))
     conexion.commit()
     conexion.close()
+
 def ver_flujos(user_id):
     conexion = conectar_db()
     df = pd.read_sql_query("SELECT * FROM finanzas_personales WHERE user_id = ? ORDER BY fecha DESC", conexion, params=(user_id,))
     conexion.close()
     return df
-def estilo_flujo(row):
-    color = 'rgba(40, 167, 69, 0.4)' if row['Tipo'] == 'Ingreso' else 'rgba(220, 53, 69, 0.4)'
-    return [f'background-color: {color}; color: #111;'] * len(row)
+
+def eliminar_flujo(flujo_id, user_id):
+    conexion = conectar_db()
+    cursor = conexion.cursor()
+    cursor.execute("DELETE FROM finanzas_personales WHERE id = ? AND user_id = ?", (flujo_id, user_id))
+    conexion.commit()
+    conexion.close()
+
+# --- NUEVAS FUNCIONES PARA CATEGORÍAS ---
+def ver_categorias(user_id, tipo):
+    """Obtiene las categorías de un usuario para un tipo específico (Ingreso o Gasto)."""
+    conexion = conectar_db()
+    df = pd.read_sql_query("SELECT * FROM categorias WHERE user_id = ? AND tipo = ?", conexion, params=(user_id, tipo))
+    conexion.close()
+    # Añadimos categorías por defecto que no se pueden borrar
+    categorias_defecto = []
+    if tipo == 'Ingreso':
+        categorias_defecto = ["Sueldo", "Inversiones", "Dividendo Recibido", "Otros"]
+    else: # Gasto
+        categorias_defecto = ["Alquiler", "Tarjeta de Crédito", "Inversiones", "Comida", "Ocio", "Otros"]
+    
+    # Combinamos las por defecto con las personalizadas
+    nombres_categorias = categorias_defecto + df['nombre'].tolist()
+    return nombres_categorias, df # Devolvemos la lista de nombres y el dataframe con IDs
+
+def anadir_categoria(user_id, tipo, nombre):
+    """Añade una nueva categoría personalizada."""
+    conexion = conectar_db()
+    cursor = conexion.cursor()
+    try:
+        cursor.execute("INSERT INTO categorias (user_id, tipo, nombre) VALUES (?, ?, ?)", (user_id, tipo, nombre))
+        conexion.commit()
+        st.success(f"Categoría '{nombre}' añadida.")
+    except sqlite3.IntegrityError:
+        st.warning(f"La categoría '{nombre}' ya existe.")
+    finally:
+        conexion.close()
+
+def eliminar_categoria(categoria_id, user_id):
+    """Elimina una categoría personalizada."""
+    conexion = conectar_db()
+    cursor = conexion.cursor()
+    cursor.execute("DELETE FROM categorias WHERE id = ? AND user_id = ?", (categoria_id, user_id))
+    conexion.commit()
+    conexion.close()
 
 # --- INTERFAZ DE LA PÁGINA ---
 st.set_page_config(layout="wide", page_title="Ingresos y Gastos")
 st.title("Registro de Ingresos y Gastos 💸")
-# ... (código del formulario sin cambios) ...
+
+# --- NUEVO: SECCIÓN PARA GESTIONAR CATEGORÍAS ---
+with st.expander("Gestionar Mis Categorías"):
+    st.subheader("Añadir Nueva Categoría")
+    with st.form("categoria_form"):
+        cat_col1, cat_col2 = st.columns([1, 2])
+        tipo_cat = cat_col1.selectbox("Tipo de Categoría", ["Ingreso", "Gasto"], key="cat_tipo")
+        nombre_cat = cat_col2.text_input("Nombre de la Nueva Categoría", key="cat_nombre")
+        cat_submitted = st.form_submit_button("Añadir Categoría")
+        
+        if cat_submitted:
+            if nombre_cat:
+                anadir_categoria(USER_ID, tipo_cat, nombre_cat)
+            else:
+                st.warning("El nombre de la categoría no puede estar vacío.")
+
+    st.subheader("Categorías Personalizadas")
+    cat_tabs = st.tabs(["Ingresos", "Gastos"])
+    
+    with cat_tabs[0]: # Pestaña Ingresos
+        _, categorias_df_ingreso = ver_categorias(USER_ID, "Ingreso")
+        if not categorias_df_ingreso.empty:
+            for index, row in categorias_df_ingreso.iterrows():
+                col1, col2 = st.columns([3, 1])
+                col1.write(row['nombre'])
+                if col2.button("Eliminar", key=f"del_cat_ing_{row['id']}"):
+                    eliminar_categoria(row['id'], USER_ID)
+                    st.rerun()
+        else:
+            st.info("No tienes categorías de ingreso personalizadas.")
+
+    with cat_tabs[1]: # Pestaña Gastos
+        _, categorias_df_gasto = ver_categorias(USER_ID, "Gasto")
+        if not categorias_df_gasto.empty:
+            for index, row in categorias_df_gasto.iterrows():
+                col1, col2 = st.columns([3, 1])
+                col1.write(row['nombre'])
+                if col2.button("Eliminar", key=f"del_cat_gas_{row['id']}"):
+                    eliminar_categoria(row['id'], USER_ID)
+                    st.rerun()
+        else:
+            st.info("No tienes categorías de gasto personalizadas.")
+
+# --- FORMULARIO DE REGISTRO (MODIFICADO) ---
 with st.form("flujo_form", clear_on_submit=True):
     st.subheader("Añadir Nuevo Movimiento")
     cols = st.columns(5)
     fecha = cols[0].date_input("Fecha", value=date.today())
     tipo = cols[1].selectbox("Tipo", ["Ingreso", "Gasto"], key="tipo_flujo")
-    categorias_ingreso = ["Sueldo", "Inversiones", "Dividendo Recibido", "Otros"]
-    categorias_gasto = ["Alquiler", "Tarjeta de Crédito", "Inversiones", "Comida", "Ocio", "Otros"]
+    
+    # *** CAMBIO: Leemos las categorías desde la base de datos ***
     if 'tipo_flujo' in st.session_state and st.session_state.tipo_flujo == "Ingreso":
-        categoria = cols[2].selectbox("Categoría", categorias_ingreso, key="cat_ingreso")
+        lista_categorias, _ = ver_categorias(USER_ID, "Ingreso")
+        categoria = cols[2].selectbox("Categoría", lista_categorias, key="cat_ingreso")
     else:
-        categoria = cols[2].selectbox("Categoría", categorias_gasto, key="cat_gasto")
+        lista_categorias, _ = ver_categorias(USER_ID, "Gasto")
+        categoria = cols[2].selectbox("Categoría", lista_categorias, key="cat_gasto")
+
     monto = cols[3].number_input("Monto", min_value=0.0, step=0.01, format="%.2f")
     descripcion = cols[4].text_input("Descripción", help="Para dividendos, puedes poner el ticker aquí.")
     submitted = st.form_submit_button("Guardar Movimiento")
@@ -56,9 +145,9 @@ with st.form("flujo_form", clear_on_submit=True):
             st.success("Movimiento guardado con éxito.")
             st.rerun()
 
+# --- RESUMEN Y GRÁFICOS (sin cambios) ---
 flujos_df = ver_flujos(USER_ID)
 st.header("Resumen Financiero")
-# ... (código del resumen sin cambios) ...
 if not flujos_df.empty:
     total_ingresos = flujos_df[flujos_df['tipo'] == 'Ingreso']['monto'].sum()
     total_gastos = flujos_df[flujos_df['tipo'] == 'Gasto']['monto'].sum()
@@ -71,42 +160,44 @@ if not flujos_df.empty:
     st.divider()
     st.header("Flujo de Caja Mensual")
     flujos_df['fecha'] = pd.to_datetime(flujos_df['fecha'])
-    
-    # Agrupamos por mes y tipo
     flujo_mensual_grouped = flujos_df.groupby([flujos_df['fecha'].dt.to_period('M'), 'tipo'])['monto'].sum()
-    
-    # Reorganizamos para tener Ingreso y Gasto como columnas
     flujo_mensual = flujo_mensual_grouped.unstack(fill_value=0).reset_index()
-    flujo_mensual['fecha'] = flujo_mensual['fecha'].dt.to_timestamp() # Convertimos a fecha
-    
-    # *** CAMBIO: Aseguramos que existan las columnas Ingreso y Gasto ***
-    if 'Ingreso' not in flujo_mensual.columns:
-        flujo_mensual['Ingreso'] = 0
-    if 'Gasto' not in flujo_mensual.columns:
-        flujo_mensual['Gasto'] = 0
-        
-    # Ahora sí, creamos el gráfico
+    flujo_mensual['fecha'] = flujo_mensual['fecha'].dt.to_timestamp()
+    if 'Ingreso' not in flujo_mensual.columns: flujo_mensual['Ingreso'] = 0
+    if 'Gasto' not in flujo_mensual.columns: flujo_mensual['Gasto'] = 0
     fig_flujo_mensual = px.bar(
-        flujo_mensual,
-        x='fecha',
-        y=['Ingreso', 'Gasto'], # Pasamos la lista de columnas que ahora sabemos que existen
-        barmode='group',
-        title='Ingresos vs. Gastos por Mes',
-        labels={'fecha': 'Mes', 'value': 'Monto ($)', 'variable': 'Tipo'} # Mejoramos etiquetas
+        flujo_mensual, x='fecha', y=['Ingreso', 'Gasto'],
+        barmode='group', title='Ingresos vs. Gastos por Mes',
+        labels={'fecha': 'Mes', 'value': 'Monto ($)', 'variable': 'Tipo'}
     )
     st.plotly_chart(fig_flujo_mensual, use_container_width=True)
-
 else:
     st.info("Aún no hay movimientos registrados para mostrar un resumen.")
 
-# ... (El resto del código para las tablas de historial no cambia) ...
+# --- HISTORIALES (sin cambios) ---
 st.divider()
 st.header("Historial General de Movimientos")
 if not flujos_df.empty:
     df_historial_finanzas = flujos_df.rename(columns={'id': 'ID', 'fecha': 'Fecha', 'tipo': 'Tipo', 'categoria': 'Categoría', 'monto': 'Monto', 'descripcion': 'Descripción'})
-    st.dataframe(df_historial_finanzas.style.apply(estilo_flujo, axis=1), use_container_width=True)
+    column_widths = [1, 2, 2, 2, 2, 1]
+    cols = st.columns(column_widths)
+    headers = ["Fecha", "Tipo", "Categoría", "Monto", "Descripción", "Acción"]
+    for col, header in zip(cols, headers):
+        col.markdown(f"**{header}**")
+    st.divider()
+    for index, row in df_historial_finanzas.iterrows():
+        cols = st.columns(column_widths)
+        cols[0].write(row['Fecha'])
+        cols[1].write(row['Tipo'])
+        cols[2].write(row['Categoría'])
+        cols[3].write(f"${row['Monto']:,.2f}")
+        cols[4].write(row['Descripción'])
+        if cols[5].button("🗑️", key=f"del_flujo_{row['ID']}"):
+            eliminar_flujo(row['ID'], USER_ID)
+            st.rerun()
 else:
     st.info("No hay movimientos para mostrar.")
+
 st.divider()
 st.header("Historial de Dividendos Cobrados")
 if not flujos_df.empty:
