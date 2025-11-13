@@ -170,7 +170,7 @@ with st.form("operacion_form", clear_on_submit=True):
             st.warning("Por favor, completa todos los campos correctamente.")
         else:
             ticker_final = ticker_op.upper()
-            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB"]
+            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB", "DOT", "DAI", "MATIC", "AVAX", "TRX", "LTC", "LINK", "ATOM", "UNI"]
             if ticker_final in criptos_comunes:
                 ticker_final = f"{ticker_final}-USD"
             anadir_operacion(fecha_op, ticker_final, tipo_op, cantidad_op, precio_op, USER_ID)

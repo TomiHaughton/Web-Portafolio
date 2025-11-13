@@ -86,7 +86,7 @@ with st.form("watchlist_form", clear_on_submit=True):
         if wl_ticker:
             # --- LÓGICA PARA CRIPTOMONEDAS (AÑADIDA AQUÍ) ---
             ticker_final = wl_ticker.upper()
-            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB"]
+            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB", "DOT", "DAI", "MATIC", "AVAX", "TRX", "LTC", "LINK", "ATOM", "UNI"]
             if ticker_final in criptos_comunes:
                 ticker_final = f"{ticker_final}-USD"
             
