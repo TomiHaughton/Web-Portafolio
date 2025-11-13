@@ -5,32 +5,30 @@ import pandas as pd
 import yfinance as yf
 import plotly.express as px
 
-# --- VERIFICADOR Y CSS (sin cambios) ---
+# --- INYECCIÓN DE CSS (sin cambios) ---
+st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
+
+# --- VERIFICADOR DE SESIÓN (sin cambios) ---
 if 'user' not in st.session_state or st.session_state.user is None:
     st.error("Debes iniciar sesión para acceder a esta página.")
     st.stop()
 USER_ID = st.session_state.user[0]
-st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
 
-# --- FUNCIONES ---
+# --- FUNCIONES (sin cambios) ---
 def conectar_db():
     return sqlite3.connect('portfolio.db')
-# ... (funciones ver_operaciones, obtener_aportaciones_retiros, obtener_precios_actuales, calcular_posiciones, etc. sin cambios)
 def anadir_operacion(fecha, ticker, tipo, cantidad, precio, user_id):
     conexion = conectar_db()
     cursor = conexion.cursor()
     cursor.execute("INSERT INTO operaciones (fecha, ticker, tipo, cantidad, precio, user_id) VALUES (?, ?, ?, ?, ?, ?)", (fecha, ticker, tipo, cantidad, precio, user_id))
     conexion.commit()
     conexion.close()
-    
-# *** NUEVA FUNCIÓN PARA ELIMINAR OPERACIONES ***
 def eliminar_operacion(operacion_id, user_id):
     conexion = conectar_db()
     cursor = conexion.cursor()
     cursor.execute("DELETE FROM operaciones WHERE id = ? AND user_id = ?", (operacion_id, user_id))
     conexion.commit()
     conexion.close()
-# ... (El resto de funciones siguen aquí)
 def ver_operaciones(user_id):
     conexion = conectar_db()
     df = pd.read_sql_query("SELECT * FROM operaciones WHERE user_id = ? ORDER BY fecha ASC", conexion, params=(user_id,))
@@ -113,7 +111,6 @@ st.title(f"Dashboard de {st.session_state.user[1]} 📊")
 operaciones_df = ver_operaciones(USER_ID)
 posiciones_df, ganancia_realizada_total, _ = calcular_posiciones(operaciones_df)
 total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID)
-# ... (código del Resumen General y Análisis Visual sin cambios) ...
 st.header("Resumen General")
 if not operaciones_df.empty:
     valor_total_portafolio = posiciones_df['valor_mercado'].sum() if 'valor_mercado' in posiciones_df.columns else 0
@@ -135,7 +132,6 @@ if not operaciones_df.empty:
     row2_cols[3].metric("Total Retirado", f"-${total_retirado:,.2f}")
 else:
     st.info("Añade operaciones para ver tu dashboard.")
-
 st.divider()
 st.header("Análisis Visual")
 col_graf1, col_graf2 = st.columns(2)
@@ -163,9 +159,11 @@ with st.form("operacion_form", clear_on_submit=True):
         ticker_op = st.text_input("Ticker (ej. AAPL, BTC)")
     with col2:
         tipo_op = st.selectbox("Tipo de Operación", ["Compra", "Venta"])
-        cantidad_op = st.number_input("Cantidad", min_value=0.0, step=0.01, format="%.2f")
+        # *** CAMBIO: Aumentamos la precisión a 4 decimales ***
+        cantidad_op = st.number_input("Cantidad", min_value=0.0, step=0.0001, format="%.4f")
     with col3:
-        precio_op = st.number_input("Precio por unidad", min_value=0.0, step=0.01, format="%.2f")
+        # *** CAMBIO: Aumentamos la precisión a 4 decimales ***
+        precio_op = st.number_input("Precio por unidad", min_value=0.0, step=0.0001, format="%.4f")
     submitted = st.form_submit_button("Añadir Operación")
     if submitted:
         if not ticker_op or cantidad_op <= 0 or precio_op <= 0:
@@ -179,40 +177,32 @@ with st.form("operacion_form", clear_on_submit=True):
             st.success(f"¡Operación de {tipo_op} para {ticker_final} añadida con éxito!")
             st.rerun()
 
-# ... (código de la tabla Posiciones Actuales sin cambios) ...
 st.header("Posiciones Actuales")
 if posiciones_df.empty:
     st.info("No tienes posiciones abiertas.")
 else:
     df_display = posiciones_df[['ticker', 'cantidad_total', 'precio_promedio_compra', 'precio_actual', 'valor_mercado', 'ganancia_no_realizada', 'rentabilidad_%']].rename(columns={'ticker': 'Ticker', 'cantidad_total': 'Cantidad', 'precio_promedio_compra': 'Precio Compra Prom.', 'precio_actual': 'Precio Actual', 'valor_mercado': 'Valor de Mercado', 'ganancia_no_realizada': 'Ganancia/Pérdida', 'rentabilidad_%': 'Rentabilidad %'})
-    st.dataframe(df_display.style.applymap(estilo_ganancia, subset=['Ganancia/Pérdida']).format({'Precio Compra Prom.': '${:,.2f}', 'Precio Actual': '${:,.2f}', 'Valor de Mercado': '${:,.2f}', 'Ganancia/Pérdida': '${:,.2f}', 'Rentabilidad %': '{:,.2f}%'}, na_rep="-").set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
+    st.dataframe(df_display.style.applymap(estilo_ganancia, subset=['Ganancia/Pérdida']).format({'Precio Compra Prom.': '${:,.2f}', 'Precio Actual': '${:,.2f}', 'Valor de Mercado': '${:,.2f}', 'Ganancia/Pérdida': '${:,.2f}', 'Rentabilidad %': '{:,.2f}%', 'Cantidad': '{:,.4f}'}, na_rep="-").set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
 
-# *** CAMBIO: Modificamos la tabla de Historial para añadir botones de eliminar ***
 st.header("Historial de Operaciones")
 if operaciones_df.empty:
     st.info("Aún no has añadido ninguna operación.")
 else:
     df_historial = operaciones_df.sort_values(by="fecha", ascending=False).rename(columns={'id': 'ID', 'fecha': 'Fecha', 'ticker': 'Ticker', 'tipo': 'Tipo', 'cantidad': 'Cantidad', 'precio': 'Precio'})
-    
-    # Creamos las columnas para la tabla manual
     column_widths = [0.5, 1, 1, 0.8, 1, 1, 0.5]
     cols = st.columns(column_widths)
     headers = ["ID", "Fecha", "Ticker", "Tipo", "Cantidad", "Precio", "Acción"]
     for col, header in zip(cols, headers):
         col.markdown(f"**{header}**")
-
     st.divider()
-
-    # Iteramos sobre los datos para mostrar cada fila con su botón
     for index, row in df_historial.iterrows():
         cols = st.columns(column_widths)
         cols[0].write(row['ID'])
         cols[1].write(row['Fecha'])
         cols[2].write(row['Ticker'])
         cols[3].write(row['Tipo'])
-        cols[4].write(row['Cantidad'])
-        cols[5].write(f"${row['Precio']:,.2f}")
-        # El botón de eliminar necesita una 'key' única
+        cols[4].write(f"{row['Cantidad']:.4f}") # Mostramos 4 decimales
+        cols[5].write(f"${row['Precio']:,.4f}") # Mostramos 4 decimales
         if cols[6].button("🗑️", key=f"del_op_{row['ID']}"):
             eliminar_operacion(row['ID'], USER_ID)
             st.rerun()
