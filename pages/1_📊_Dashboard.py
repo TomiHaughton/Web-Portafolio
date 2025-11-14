@@ -12,7 +12,7 @@ if 'user' not in st.session_state or st.session_state.user is None:
     st.stop()
 USER_ID = st.session_state.user[0]
 
-# --- CSS ---
+# --- CSS PARA CENTRADO ---
 st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
 
 # --- FUNCIONES DE BASE DE DATOS ---
@@ -20,6 +20,7 @@ def conectar_db():
     return sqlite3.connect('portfolio.db')
 
 def verificar_y_migrar_db():
+    """Asegura que la columna moneda exista en operaciones."""
     conexion = conectar_db()
     cursor = conexion.cursor()
     try:
@@ -50,18 +51,33 @@ def ver_operaciones(user_id):
     conexion.close()
     return df
 
-def obtener_aportaciones_retiros(user_id):
+def obtener_aportaciones_retiros(user_id, precio_dolar):
+    """Calcula capital neto convirtiendo flujos en ARS a USD usando la cotización actual."""
     try:
         conexion = conectar_db()
-        df = pd.read_sql_query("SELECT tipo, monto FROM finanzas_personales WHERE categoria = 'Inversiones' AND user_id = ?", conexion, params=(user_id,))
+        # Intentamos leer moneda, si no existe la tabla o columna fallará elegantemente
+        df = pd.read_sql_query("SELECT tipo, monto, moneda FROM finanzas_personales WHERE categoria = 'Inversiones' AND user_id = ?", conexion, params=(user_id,))
         conexion.close()
-        total_aportado = df[df['tipo'] == 'Gasto']['monto'].sum()
-        total_retirado = df[df['tipo'] == 'Ingreso']['monto'].sum()
+        
+        if df.empty: return 0, 0
+
+        # Normalizamos columna moneda si hay datos viejos
+        if 'moneda' not in df.columns: df['moneda'] = 'ARS' # Asumimos ARS por defecto en finanzas
+        df['moneda'] = df['moneda'].fillna('ARS')
+
+        # Convertimos todo a USD
+        df['monto_usd'] = df.apply(
+            lambda x: x['monto'] if x['moneda'] == 'USD' else x['monto'] / precio_dolar, axis=1
+        )
+        
+        total_aportado = df[df['tipo'] == 'Gasto']['monto_usd'].sum()
+        total_retirado = df[df['tipo'] == 'Ingreso']['monto_usd'].sum()
+        
         return total_aportado, total_retirado
     except:
         return 0, 0
 
-# --- FUNCIONES DE DATOS ---
+# --- FUNCIONES DE DATOS Y CÁLCULO ---
 @st.cache_data(ttl=300)
 def obtener_dolar_argentina():
     precio = None
@@ -91,7 +107,7 @@ def obtener_dolar_argentina():
 
 @st.cache_data(ttl=600)
 def obtener_datos_mercado(tickers):
-    if not tickers: return {}, 1
+    if not tickers: return {}
     try:
         data = yf.Tickers(tickers).history(period='1d')
         precios = data['Close'].iloc[-1].to_dict() if not data.empty else {}
@@ -102,9 +118,12 @@ def obtener_datos_mercado(tickers):
 def calcular_posiciones(df_ops, precio_dolar):
     if df_ops.empty: return pd.DataFrame(), 0, pd.DataFrame()
     df = df_ops.copy()
+    
     if 'moneda' not in df.columns: df['moneda'] = 'USD'
     df['moneda'] = df['moneda'].fillna('USD')
+
     df['cantidad_neta'] = df.apply(lambda row: row['cantidad'] if row['tipo'] == 'Compra' else -row['cantidad'], axis=1)
+    
     df['coste_op'] = df['cantidad'] * df['precio']
     df['ingreso_op'] = df['cantidad'] * df['precio']
     
@@ -125,14 +144,17 @@ def calcular_posiciones(df_ops, precio_dolar):
     ganancia_realizada_usd = 0
     for index, row in posiciones.iterrows():
         val = row['beneficio_realizado_original']
-        if row['moneda'] == 'ARS': ganancia_realizada_usd += (val / precio_dolar)
-        else: ganancia_realizada_usd += val
+        if row['moneda'] == 'ARS':
+            ganancia_realizada_usd += (val / precio_dolar)
+        else:
+            ganancia_realizada_usd += val
     
     beneficios_realizados_df = posiciones[['ticker', 'beneficio_realizado_original', 'moneda']]
 
     if not posiciones_abiertas.empty:
         tickers_list = posiciones_abiertas['ticker'].unique().tolist()
         precios_actuales = obtener_datos_mercado(tickers_list)
+        
         posiciones_abiertas['precio_actual'] = posiciones_abiertas['ticker'].map(precios_actuales).fillna(0)
         
         def calcular_valor_usd(row):
@@ -150,11 +172,13 @@ def calcular_posiciones(df_ops, precio_dolar):
             
         posiciones_abiertas['coste_total_usd'] = posiciones_abiertas.apply(calcular_coste_usd, axis=1)
         posiciones_abiertas['ganancia_no_realizada_usd'] = posiciones_abiertas['valor_mercado_usd'] - posiciones_abiertas['coste_total_usd']
-        posiciones_abiertas['rentabilidad_%'] = posiciones_abiertas.apply(lambda x: (x['ganancia_no_realizada_usd'] / x['coste_total_usd'] * 100) if x['coste_total_usd'] > 0 else 0, axis=1)
+        
+        posiciones_abiertas['rentabilidad_%'] = posiciones_abiertas.apply(
+            lambda x: (x['ganancia_no_realizada_usd'] / x['coste_total_usd'] * 100) if x['coste_total_usd'] > 0 else 0, axis=1
+        )
 
     return posiciones_abiertas, ganancia_realizada_usd, beneficios_realizados_df
 
-# *** FUNCIÓN REACTIVADA Y MEJORADA ***
 @st.cache_data(ttl=600)
 def calcular_evolucion_patrimonio(df_ops, precio_dolar):
     if df_ops.empty: return None
@@ -163,10 +187,8 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
     tickers = df_ops['ticker'].unique().tolist()
     start_date = df_ops['fecha'].min()
     
-    # Descargamos precios históricos
     try:
         precios_historicos = yf.download(tickers, start=start_date, progress=False)['Close']
-        # Limpieza de duplicados en índice
         if isinstance(precios_historicos.index, pd.DatetimeIndex):
             precios_historicos = precios_historicos.loc[~precios_historicos.index.duplicated(keep='first')]
     except:
@@ -181,7 +203,6 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
         ops_diarias = ops_ticker.groupby('fecha')['cantidad_neta'].sum()
         tenencias_diarias = ops_diarias.cumsum().reindex(patrimonio_diario.index, method='ffill').fillna(0)
         
-        # Obtenemos el precio histórico del ticker
         if isinstance(precios_historicos, pd.DataFrame) and ticker in precios_historicos.columns:
             precio_serie = precios_historicos[ticker]
         elif isinstance(precios_historicos, pd.Series) and precios_historicos.name == ticker:
@@ -189,12 +210,8 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
         else:
             precio_serie = 0
             
-        # Calculamos valor diario
         valor_diario = tenencias_diarias * precio_serie.reindex(patrimonio_diario.index, method='ffill')
         
-        # *** CONVERSIÓN INTELIGENTE ***
-        # Si el ticker es argentino (termina en .BA), dividimos por el dólar actual
-        # para normalizar la curva y que no se dispare en pesos.
         if ticker.endswith('.BA'):
             valor_diario = valor_diario / precio_dolar
             
@@ -222,7 +239,7 @@ st.sidebar.metric("Cotización Dólar", f"${precio_dolar_hoy:,.0f} ARS")
 st.sidebar.caption(f"Fuente: {fuente_dolar}")
 
 posiciones_df, ganancia_realizada_total, _ = calcular_posiciones(operaciones_df, precio_dolar_hoy)
-total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID)
+total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID, precio_dolar_hoy) # <-- Pasamos el dólar aquí
 
 st.header("Resumen General (Base USD)")
 if not operaciones_df.empty:
@@ -259,7 +276,6 @@ with c_graf1:
     else:
         st.info("Sin datos.")
 with c_graf2:
-    # *** GRÁFICO REACTIVADO ***
     evolucion_df = calcular_evolucion_patrimonio(operaciones_df, precio_dolar_hoy)
     if evolucion_df is not None and not evolucion_df.empty:
         fig_ev = px.area(evolucion_df, x='Fecha', y='Total USD', title='Evolución Histórica (Estimada en USD)')
@@ -289,7 +305,11 @@ with st.form("operacion_form", clear_on_submit=True):
             st.warning("Datos incompletos.")
         else:
             ticker_final = ticker_op.upper()
-            criptos_comunes = ["BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB", "DOT", "DAI", "MATIC", "AVAX", "TRX", "LTC", "LINK", "ATOM", "UNI"]
+            # *** LISTA DE CRIPTOS ACTUALIZADA ***
+            criptos_comunes = [
+                "BTC", "ETH", "SOL", "USDT", "BNB", "XRP", "ADA", "DOGE", "SHIB", 
+                "DOT", "DAI", "MATIC", "AVAX", "TRX", "LTC", "LINK", "ATOM", "UNI"
+            ]
             if ticker_final in criptos_comunes: ticker_final = f"{ticker_final}-USD"
             
             anadir_operacion(fecha_op, ticker_final, tipo_op, cantidad_op, precio_op, moneda_op, USER_ID)
@@ -298,8 +318,19 @@ with st.form("operacion_form", clear_on_submit=True):
 
 st.header("Posiciones Actuales")
 if not posiciones_df.empty:
-    df_show = posiciones_df[['ticker', 'moneda', 'cantidad_total', 'ppp_original', 'precio_actual', 'valor_mercado_usd', 'ganancia_no_realizada_usd', 'rentabilidad_%']].rename(columns={'ticker': 'Ticker', 'moneda': 'Moneda', 'cantidad_total': 'Cant', 'ppp_original': 'Precio Prom (Orig)', 'precio_actual': 'Precio Hoy', 'valor_mercado_usd': 'Valor (USD)', 'ganancia_no_realizada_usd': 'Ganancia (USD)', 'rentabilidad_%': 'Rentabilidad %'})
-    st.dataframe(df_show.style.applymap(estilo_ganancia, subset=['Ganancia (USD)']).format({'Precio Prom (Orig)': '${:,.2f}', 'Precio Hoy': '${:,.2f}', 'Valor (USD)': 'US$ {:,.2f}', 'Ganancia (USD)': 'US$ {:,.2f}', 'Rentabilidad %': '{:,.2f}%'}, na_rep="-").set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
+    df_show = posiciones_df[[
+        'ticker', 'moneda', 'cantidad_total', 'ppp_original', 'precio_actual', 
+        'valor_mercado_usd', 'ganancia_no_realizada_usd', 'rentabilidad_%'
+    ]].rename(columns={
+        'ticker': 'Ticker', 'moneda': 'Moneda', 'cantidad_total': 'Cant',
+        'ppp_original': 'Precio Prom (Orig)', 'precio_actual': 'Precio Hoy',
+        'valor_mercado_usd': 'Valor (USD)', 'ganancia_no_realizada_usd': 'Ganancia (USD)',
+        'rentabilidad_%': 'Rentabilidad %'
+    })
+    st.dataframe(df_show.style.applymap(estilo_ganancia, subset=['Ganancia (USD)']).format({
+        'Precio Prom (Orig)': '${:,.2f}', 'Precio Hoy': '${:,.2f}', 
+        'Valor (USD)': 'US$ {:,.2f}', 'Ganancia (USD)': 'US$ {:,.2f}', 'Rentabilidad %': '{:,.2f}%'
+    }, na_rep="-").set_table_styles([dict(selector="th", props=[("text-align", "center")]), dict(selector="td", props=[("text-align", "center")])]), use_container_width=True)
 
 st.header("Historial de Operaciones")
 if not operaciones_df.empty:
