@@ -1,233 +1,166 @@
 import streamlit as st
-import sqlite3
+import psycopg2
 import pandas as pd
 from datetime import date
 import plotly.express as px
 import requests
 
-# --- VERIFICADOR DE SESIÓN ---
 if 'user' not in st.session_state or st.session_state.user is None:
-    st.error("Debes iniciar sesión para acceder a esta página.")
+    st.error("Debes iniciar sesión.")
     st.stop()
 USER_ID = st.session_state.user[0]
-
-# --- CSS ---
 st.markdown("""<style>.stDataFrame th, .stDataFrame td {text-align: center;}</style>""", unsafe_allow_html=True)
 
-# --- FUNCIONES DE BASE DE DATOS ---
 def conectar_db():
-    return sqlite3.connect('portfolio.db')
-
-# *** FUNCIÓN DE AUTO-REPARACIÓN (CRÍTICA) ***
-def reparar_estructura_db():
-    """Revisa si la tabla finanzas tiene la columna moneda y la crea si falta."""
-    conexion = conectar_db()
-    cursor = conexion.cursor()
-    try:
-        # Intentamos leer la columna 'moneda'
-        cursor.execute("SELECT moneda FROM finanzas_personales LIMIT 1")
-    except sqlite3.OperationalError:
-        # Si da error, es que no existe. La creamos.
-        cursor.execute("ALTER TABLE finanzas_personales ADD COLUMN moneda TEXT DEFAULT 'ARS'")
-        conexion.commit()
-    finally:
-        conexion.close()
-
+    return psycopg2.connect(
+        host=st.secrets["connections"]["supabase"]["host"],
+        database=st.secrets["connections"]["supabase"]["database"],
+        user=st.secrets["connections"]["supabase"]["username"],
+        password=st.secrets["connections"]["supabase"]["password"],
+        port=st.secrets["connections"]["supabase"]["port"]
+    )
 def anadir_flujo(fecha, tipo, categoria, monto, descripcion, moneda, user_id):
-    conexion = conectar_db()
-    cursor = conexion.cursor()
-    cursor.execute("INSERT INTO finanzas_personales (fecha, tipo, categoria, monto, descripcion, moneda, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)", (fecha, tipo, categoria, monto, descripcion, moneda, user_id))
-    conexion.commit()
-    conexion.close()
-
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO finanzas_personales (fecha, tipo, categoria, monto, descripcion, moneda, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s)", (fecha, tipo, categoria, monto, descripcion, moneda, user_id))
+    conn.commit()
+    conn.close()
 def ver_flujos(user_id):
-    conexion = conectar_db()
-    df = pd.read_sql_query("SELECT * FROM finanzas_personales WHERE user_id = ? ORDER BY fecha DESC", conexion, params=(user_id,))
-    conexion.close()
+    conn = conectar_db()
+    df = pd.read_sql_query("SELECT * FROM finanzas_personales WHERE user_id = %s ORDER BY fecha DESC", conn, params=(user_id,))
+    conn.close()
     return df
-
 def eliminar_flujo(flujo_id, user_id):
-    conexion = conectar_db()
-    cursor = conexion.cursor()
-    cursor.execute("DELETE FROM finanzas_personales WHERE id = ? AND user_id = ?", (flujo_id, user_id))
-    conexion.commit()
-    conexion.close()
-
-# --- FUNCIONES DE CATEGORÍAS Y DÓLAR ---
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM finanzas_personales WHERE id = %s AND user_id = %s", (flujo_id, user_id))
+    conn.commit()
+    conn.close()
 def ver_categorias(user_id, tipo):
-    conexion = conectar_db()
-    df = pd.read_sql_query("SELECT * FROM categorias WHERE user_id = ? AND tipo = ?", conexion, params=(user_id, tipo))
-    conexion.close()
-    categorias_defecto = []
-    if tipo == 'Ingreso': categorias_defecto = ["Sueldo", "Inversiones", "Dividendo Recibido", "Otros"]
-    else: categorias_defecto = ["Alquiler", "Tarjeta de Crédito", "Inversiones", "Comida", "Ocio", "Otros"]
-    return categorias_defecto + df['nombre'].tolist(), df
-
+    conn = conectar_db()
+    df = pd.read_sql_query("SELECT * FROM categorias WHERE user_id = %s AND tipo = %s", conn, params=(user_id, tipo))
+    conn.close()
+    cats = ["Sueldo", "Inversiones", "Dividendo Recibido", "Otros"] if tipo == 'Ingreso' else ["Alquiler", "Tarjeta de Crédito", "Inversiones", "Comida", "Ocio", "Otros"]
+    return cats + df['nombre'].tolist(), df
 def anadir_categoria(user_id, tipo, nombre):
-    conexion = conectar_db()
-    cursor = conexion.cursor()
+    conn = conectar_db()
+    cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO categorias (user_id, tipo, nombre) VALUES (?, ?, ?)", (user_id, tipo, nombre))
-        conexion.commit()
-        st.success(f"Categoría '{nombre}' añadida.")
-    except: st.warning(f"La categoría '{nombre}' ya existe.")
-    finally: conexion.close()
-
-def eliminar_categoria(categoria_id, user_id):
-    conexion = conectar_db()
-    cursor = conexion.cursor()
-    cursor.execute("DELETE FROM categorias WHERE id = ? AND user_id = ?", (categoria_id, user_id))
-    conexion.commit()
-    conexion.close()
+        cursor.execute("INSERT INTO categorias (user_id, tipo, nombre) VALUES (%s, %s, %s)", (user_id, tipo, nombre))
+        conn.commit()
+        st.success("Añadida.")
+    except: st.warning("Ya existe.")
+    finally: conn.close()
+def eliminar_categoria(id_cat, user_id):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM categorias WHERE id = %s AND user_id = %s", (id_cat, user_id))
+    conn.commit()
+    conn.close()
 
 @st.cache_data(ttl=300)
-def obtener_dolar_blue_compartido():
-    if 'precio_dolar_compartido' in st.session_state:
-        return st.session_state['precio_dolar_compartido']
-    try:
-        resp = requests.get("https://dolarapi.com/v1/dolares/cripto", timeout=5)
-        if resp.status_code == 200: return float(resp.json()['venta'])
+def obtener_dolar():
+    if 'precio_dolar_compartido' in st.session_state: return st.session_state['precio_dolar_compartido']
+    try: 
+        r = requests.get("https://dolarapi.com/v1/dolares/cripto", timeout=5)
+        if r.status_code == 200: return float(r.json()['venta'])
     except: pass
     return 1150.0
 
-def estilo_flujo(row):
-    color = 'rgba(40, 167, 69, 0.4)' if row['Tipo'] == 'Ingreso' else 'rgba(220, 53, 69, 0.4)'
-    return [f'background-color: {color}; color: #111;'] * len(row)
+def estilo(row):
+    c = 'rgba(40, 167, 69, 0.4)' if row['Tipo'] == 'Ingreso' else 'rgba(220, 53, 69, 0.4)'
+    return [f'background-color: {c}; color: #111;'] * len(row)
 
-# --- INTERFAZ DE LA PÁGINA ---
-st.set_page_config(layout="wide", page_title="Ingresos y Gastos")
-st.title("Registro de Ingresos y Gastos 💸")
+st.set_page_config(layout="wide", page_title="Ingresos")
+st.title("Ingresos y Gastos 💸")
+dolar = obtener_dolar()
+st.sidebar.metric("Dólar Ref", f"${dolar:,.0f}")
 
-# 1. EJECUTAMOS LA REPARACIÓN DE LA BASE DE DATOS AQUÍ MISMO
-reparar_estructura_db()
-
-dolar_hoy = obtener_dolar_blue_compartido()
-st.sidebar.markdown("---")
-st.sidebar.metric("Cotización Dólar (Ref)", f"${dolar_hoy:,.0f} ARS")
-
-with st.expander("Gestionar Mis Categorías"):
-    st.subheader("Añadir Nueva Categoría")
-    with st.form("categoria_form"):
+with st.expander("Categorías"):
+    with st.form("fc"):
         c1, c2 = st.columns([1, 2])
-        tipo_cat = c1.selectbox("Tipo", ["Ingreso", "Gasto"], key="cat_tipo")
-        nombre_cat = c2.text_input("Nombre", key="cat_nombre")
-        if st.form_submit_button("Añadir"):
-            if nombre_cat: anadir_categoria(USER_ID, tipo_cat, nombre_cat)
-            else: st.warning("Nombre vacío.")
-    cat_tabs = st.tabs(["Ingresos", "Gastos"])
-    with cat_tabs[0]:
-        _, df_i = ver_categorias(USER_ID, "Ingreso")
-        if not df_i.empty:
-            for i, r in df_i.iterrows():
-                cx, cy = st.columns([3, 1])
-                cx.write(r['nombre'])
-                if cy.button("Borrar", key=f"di_{r['id']}"):
-                    eliminar_categoria(r['id'], USER_ID)
-                    st.rerun()
-    with cat_tabs[1]:
-        _, df_g = ver_categorias(USER_ID, "Gasto")
-        if not df_g.empty:
-            for i, r in df_g.iterrows():
-                cx, cy = st.columns([3, 1])
-                cx.write(r['nombre'])
-                if cy.button("Borrar", key=f"dg_{r['id']}"):
-                    eliminar_categoria(r['id'], USER_ID)
-                    st.rerun()
+        tc = c1.selectbox("Tipo", ["Ingreso", "Gasto"])
+        nc = c2.text_input("Nombre")
+        if st.form_submit_button("Añadir") and nc: anadir_categoria(USER_ID, tc, nc)
+    t1, t2 = st.tabs(["Ingresos", "Gastos"])
+    with t1:
+        _, df = ver_categorias(USER_ID, "Ingreso")
+        for i,r in df.iterrows():
+            c1, c2 = st.columns([3,1])
+            c1.write(r['nombre'])
+            if c2.button("X", key=f"ci{r['id']}"): eliminar_categoria(r['id'], USER_ID); st.rerun()
+    with t2:
+        _, df = ver_categorias(USER_ID, "Gasto")
+        for i,r in df.iterrows():
+            c1, c2 = st.columns([3,1])
+            c1.write(r['nombre'])
+            if c2.button("X", key=f"cg{r['id']}"): eliminar_categoria(r['id'], USER_ID); st.rerun()
 
 st.divider()
+with st.form("ff", clear_on_submit=True):
+    st.subheader("Nuevo Movimiento")
+    c1, c2, c3, c4, c5 = st.columns([1,1,1,1.5,2])
+    fe = c1.date_input("Fecha", value=date.today())
+    ti = c2.selectbox("Tipo", ["Ingreso", "Gasto"], key="tf")
+    mo = c3.selectbox("Moneda", ["ARS", "USD"])
+    lst, _ = ver_categorias(USER_ID, ti)
+    ca = c4.selectbox("Categoría", lst)
+    mt = c5.number_input("Monto", min_value=0.0, step=0.01, format="%.4f")
+    de = st.text_input("Desc")
+    if st.form_submit_button("Guardar") and mt > 0:
+        anadir_flujo(fe, ti, ca, mt, de, mo, USER_ID); st.success("Listo"); st.rerun()
 
-with st.form("flujo_form", clear_on_submit=True):
-    st.subheader("Añadir Nuevo Movimiento")
-    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1.5, 2])
-    fecha = c1.date_input("Fecha", value=date.today())
-    tipo = c2.selectbox("Tipo", ["Ingreso", "Gasto"], key="tipo_flujo")
-    moneda = c3.selectbox("Moneda", ["ARS", "USD"])
-    if 'tipo_flujo' in st.session_state and st.session_state.tipo_flujo == "Ingreso":
-        lista, _ = ver_categorias(USER_ID, "Ingreso")
-        categoria = c4.selectbox("Categoría", lista, key="cat_ingreso")
-    else:
-        lista, _ = ver_categorias(USER_ID, "Gasto")
-        categoria = c4.selectbox("Categoría", lista, key="cat_gasto")
-    monto = c5.number_input("Monto", min_value=0.0, step=0.01, format="%.4f") # 4 decimales
-    descripcion = st.text_input("Descripción")
-    if st.form_submit_button("Guardar"):
-        if not categoria or monto <= 0: st.warning("Datos inc.")
-        else:
-            anadir_flujo(fecha, st.session_state.tipo_flujo, categoria, monto, descripcion, moneda, USER_ID)
-            st.success("Guardado.")
-            st.rerun()
-
-flujos_df = ver_flujos(USER_ID)
-st.header("Resumen Financiero (Visualización en USD)")
-
-if not flujos_df.empty:
-    # Aseguramos columna moneda en el DF
-    if 'moneda' not in flujos_df.columns: flujos_df['moneda'] = 'ARS'
-    
-    flujos_df['monto_usd'] = flujos_df.apply(lambda x: x['monto'] if x['moneda'] == 'USD' else x['monto'] / dolar_hoy, axis=1)
-    flujos_df['fecha'] = pd.to_datetime(flujos_df['fecha'])
-    
+df = ver_flujos(USER_ID)
+st.header("Resumen (USD)")
+if not df.empty:
+    if 'moneda' not in df.columns: df['moneda'] = 'ARS'
+    df['monto_usd'] = df.apply(lambda x: x['monto'] if x['moneda']=='USD' else x['monto']/dolar, axis=1)
+    df['fecha'] = pd.to_datetime(df['fecha'])
     hoy = pd.Timestamp.now()
-    mask_mes_actual = (flujos_df['fecha'].dt.month == hoy.month) & (flujos_df['fecha'].dt.year == hoy.year)
-    df_mes = flujos_df[mask_mes_actual]
+    df_mes = df[(df['fecha'].dt.month == hoy.month) & (df['fecha'].dt.year == hoy.year)]
     
-    # 1. Métricas Mes Actual
-    ingresos_mes = df_mes[df_mes['tipo'] == 'Ingreso']['monto_usd'].sum()
-    gastos_brutos_mes = df_mes[df_mes['tipo'] == 'Gasto']['monto_usd'].sum()
-    inversion_mes = df_mes[(df_mes['tipo'] == 'Gasto') & (df_mes['categoria'] == 'Inversiones')]['monto_usd'].sum()
-    gastos_vida_mes = gastos_brutos_mes - inversion_mes
-    enviado_inversion_mes = inversion_mes
+    ing_mes = df_mes[df_mes['tipo']=='Ingreso']['monto_usd'].sum()
+    gas_mes = df_mes[df_mes['tipo']=='Gasto']['monto_usd'].sum()
+    inv_mes = df_mes[(df_mes['tipo']=='Gasto')&(df_mes['categoria']=='Inversiones')]['monto_usd'].sum()
+    vid_mes = gas_mes - inv_mes
     
-    # 2. Métricas Históricas
-    ingresos_hist = flujos_df[flujos_df['tipo'] == 'Ingreso']['monto_usd'].sum()
-    gastos_brutos_hist = flujos_df[flujos_df['tipo'] == 'Gasto']['monto_usd'].sum()
-    inversion_hist = flujos_df[(flujos_df['tipo'] == 'Gasto') & (flujos_df['categoria'] == 'Inversiones')]['monto_usd'].sum()
-    gastos_vida_hist = gastos_brutos_hist - inversion_hist
-    ahorro_neto_acumulado = ingresos_hist - gastos_vida_hist
-
+    ing_hist = df[df['tipo']=='Ingreso']['monto_usd'].sum()
+    gas_hist = df[df['tipo']=='Gasto']['monto_usd'].sum()
+    inv_hist = df[(df['tipo']=='Gasto')&(df['categoria']=='Inversiones')]['monto_usd'].sum()
+    ahorro = ing_hist - (gas_hist - inv_hist)
+    
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric(f"Ingresos ({hoy.strftime('%B')})", f"US$ {ingresos_mes:,.2f}")
-    c2.metric(f"Gastos Vida ({hoy.strftime('%B')})", f"US$ {gastos_vida_mes:,.2f}")
-    c3.metric(f"Inversión ({hoy.strftime('%B')})", f"US$ {enviado_inversion_mes:,.2f}")
-    c4.metric("Ahorro Total Acum.", f"US$ {ahorro_neto_acumulado:,.2f}")
-    st.caption(f"*Valores convertidos a Dólar (${dolar_hoy:,.0f}).")
-
-    st.divider()
-    st.header("Flujo de Caja Mensual (Ingresos vs. Gastos Vida)")
-    df_grafico = flujos_df[flujos_df['categoria'] != 'Inversiones'].copy()
-    if not df_grafico.empty:
-        mensual = df_grafico.groupby([df_grafico['fecha'].dt.to_period('M'), 'tipo'])['monto_usd'].sum().reset_index()
-        mensual['fecha'] = mensual['fecha'].dt.to_timestamp()
-        fig = px.bar(mensual, x='fecha', y='monto_usd', color='tipo', barmode='group', title='Ingresos vs. Gastos de Vida por Mes', labels={'fecha': 'Mes', 'monto_usd': 'Monto (USD)', 'tipo': 'Tipo'})
-        fig.update_xaxes(rangeslider_visible=True)
-        st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Sin movimientos.")
+    c1.metric("Ingresos Mes", f"US$ {ing_mes:,.2f}")
+    c2.metric("Vida Mes", f"US$ {vid_mes:,.2f}")
+    c3.metric("Inv. Mes", f"US$ {inv_mes:,.2f}")
+    c4.metric("Ahorro Hist.", f"US$ {ahorro:,.2f}")
+    
+    dfg = df[df['categoria']!='Inversiones'].copy()
+    if not dfg.empty:
+        men = dfg.groupby([dfg['fecha'].dt.to_period('M'), 'tipo'])['monto_usd'].sum().reset_index()
+        men['fecha'] = men['fecha'].dt.to_timestamp()
+        st.plotly_chart(px.bar(men, x='fecha', y='monto_usd', color='tipo', barmode='group'), use_container_width=True)
 
 st.divider()
-st.header("Historial General")
-if not flujos_df.empty:
-    df_show = flujos_df.rename(columns={'id':'ID', 'fecha':'Fecha', 'tipo':'Tipo', 'categoria':'Categoría', 'monto':'Monto', 'moneda':'Moneda', 'descripcion':'Descripción'})
-    cols = st.columns([1, 1, 2, 1, 1.5, 2, 0.5])
-    for c, h in zip(cols, ["Fecha", "Tipo", "Categoría", "Moneda", "Monto", "Descripción", "Acción"]): c.markdown(f"**{h}**")
+st.header("Historial")
+if not df.empty:
+    dfs = df.rename(columns={'id':'ID','fecha':'Fecha','tipo':'Tipo','categoria':'Categoría','monto':'Monto','moneda':'Moneda','descripcion':'Desc'})
+    cols = st.columns([1,1,2,1,1.5,2,0.5])
+    for c,h in zip(cols, ["Fecha","Tipo","Cat","Mon","Monto","Desc","Acc"]): c.markdown(f"**{h}**")
     st.divider()
-    for idx, row in df_show.iterrows():
-        cols = st.columns([1, 1, 2, 1, 1.5, 2, 0.5])
-        cols[0].write(row['Fecha'].strftime('%Y-%m-%d'))
-        cols[1].write(row['Tipo'])
-        cols[2].write(row['Categoría'])
-        cols[3].write(row['Moneda'])
-        cols[4].write(f"{row['Monto']:,.4f}")
-        cols[5].write(row['Descripción'])
-        if cols[6].button("🗑️", key=f"del_f_{row['ID']}"):
-            eliminar_flujo(row['ID'], USER_ID)
-            st.rerun()
+    for i,r in dfs.iterrows():
+        cols = st.columns([1,1,2,1,1.5,2,0.5])
+        cols[0].write(r['Fecha'].strftime('%Y-%m-%d'))
+        cols[1].write(r['Tipo'])
+        cols[2].write(r['Categoría'])
+        cols[3].write(r['Moneda'])
+        cols[4].write(f"{r['Monto']:,.2f}")
+        cols[5].write(r['Desc'])
+        if cols[6].button("🗑️", key=f"del{r['ID']}"): eliminar_flujo(r['ID'], USER_ID); st.rerun()
 
 st.divider()
-st.header("Historial de Dividendos Cobrados")
-if not flujos_df.empty:
-    divs = flujos_df[(flujos_df['tipo'] == 'Ingreso') & (flujos_df['categoria'] == 'Dividendo Recibido')]
-    if not divs.empty:
-        st.dataframe(divs[['fecha', 'monto_usd', 'descripcion']].rename(columns={'fecha':'Fecha', 'monto_usd':'Monto (USD Est.)'}), use_container_width=True)
-    else: st.info("Sin dividendos cobrados.")
-else: st.info("Sin datos.")
+st.header("Dividendos Cobrados")
+if not df.empty:
+    divs = df[(df['tipo']=='Ingreso')&(df['categoria']=='Dividendo Recibido')]
+    if not divs.empty: st.dataframe(divs[['fecha','monto_usd','descripcion']], use_container_width=True)
+    else: st.info("0 dividendos.")
