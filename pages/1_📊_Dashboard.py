@@ -78,7 +78,7 @@ def obtener_dolar_argentina():
 def obtener_datos_mercado(tickers):
     if not tickers: return {}
     try:
-        data = yf.Tickers(tickers).history(period='1d')
+        data = yf.Tickers(tickers).history(period='5d')
         precios = data['Close'].iloc[-1].to_dict() if not data.empty else {}
     except: precios = {}
     return precios
