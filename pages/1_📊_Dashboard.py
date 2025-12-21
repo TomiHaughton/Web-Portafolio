@@ -77,28 +77,27 @@ def obtener_dolar_argentina():
 @st.cache_data(ttl=600)
 def obtener_datos_mercado(tickers):
     if not tickers: return {}
-    try:
-        # Usamos 'download' que es más robusto y pedimos 5 días
-        data = yf.download(tickers, period="5d", progress=False)
-        
-        # Verificamos si descargó algo
-        if data.empty: return {}
-
-        # CASO 1: Un solo ticker (La estructura es plana)
-        # Si data['Close'] es una Serie (lista de números), es un solo activo
-        if isinstance(data['Close'], pd.Series):
-            precio = data['Close'].iloc[-1] # Último precio
-            # Devolvemos el diccionario manual: { "MCD": 290.50 }
-            ticker_nombre = tickers[0] if isinstance(tickers, list) else tickers
-            return {ticker_nombre: precio}
+    precios = {}
+    
+    for ticker in tickers:
+        try:
+            # 1. Pedimos 5 días de historia para asegurar que agarramos el último día hábil
+            ticker_obj = yf.Ticker(ticker)
+            hist = ticker_obj.history(period="5d")
             
-        # CASO 2: Varios tickers (La estructura es una tabla ancha)
-        # data['Close'] es un DataFrame
-        else:
-            return data['Close'].iloc[-1].to_dict()
+            # 2. Verificamos si hay datos
+            if not hist.empty:
+                # 3. .dropna() elimina filas vacías (fines de semana/feriados)
+                # 4. .iloc[-1] agarra el último precio real (el del viernes para acciones)
+                precio_final = hist['Close'].dropna().iloc[-1]
+                precios[ticker] = precio_final
+            else:
+                precios[ticker] = 0.0
+        except Exception:
+            # Si falla un ticker específico, ponemos 0 pero no rompemos el resto
+            precios[ticker] = 0.0
             
-    except Exception as e:
-        return {}
+    return precios
 
 @st.cache_data(ttl=60) 
 def calcular_efectivo_actual(user_id):
