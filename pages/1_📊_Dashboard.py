@@ -78,10 +78,27 @@ def obtener_dolar_argentina():
 def obtener_datos_mercado(tickers):
     if not tickers: return {}
     try:
-        data = yf.Tickers(tickers).history(period='5d')
-        precios = data['Close'].iloc[-1].to_dict() if not data.empty else {}
-    except: precios = {}
-    return precios
+        # Usamos 'download' que es más robusto y pedimos 5 días
+        data = yf.download(tickers, period="5d", progress=False)
+        
+        # Verificamos si descargó algo
+        if data.empty: return {}
+
+        # CASO 1: Un solo ticker (La estructura es plana)
+        # Si data['Close'] es una Serie (lista de números), es un solo activo
+        if isinstance(data['Close'], pd.Series):
+            precio = data['Close'].iloc[-1] # Último precio
+            # Devolvemos el diccionario manual: { "MCD": 290.50 }
+            ticker_nombre = tickers[0] if isinstance(tickers, list) else tickers
+            return {ticker_nombre: precio}
+            
+        # CASO 2: Varios tickers (La estructura es una tabla ancha)
+        # data['Close'] es un DataFrame
+        else:
+            return data['Close'].iloc[-1].to_dict()
+            
+    except Exception as e:
+        return {}
 
 @st.cache_data(ttl=60) 
 def calcular_efectivo_actual(user_id):
