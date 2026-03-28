@@ -185,32 +185,67 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
     if df_ops.empty: return None
     df_ops = df_ops.copy()
     df_ops['fecha'] = pd.to_datetime(df_ops['fecha'])
-    tickers = df_ops['ticker'].unique().tolist()
-    start_date = df_ops['fecha'].min()
-    try:
-        precios_historicos = yf.download(tickers, start=start_date, progress=False)['Close']
-        if isinstance(precios_historicos.index, pd.DatetimeIndex):
-            precios_historicos = precios_historicos.loc[~precios_historicos.index.duplicated(keep='first')]
-    except:
-        return None
-    rango = pd.date_range(start=start_date, end=date.today())
-    patrimonio = pd.DataFrame(index=rango)
-    for ticker in tickers:
-        ops_t = df_ops[df_ops['ticker']==ticker].copy()
-        ops_t['cantidad_neta'] = ops_t['cantidad'].where(ops_t['tipo']=='Compra', -ops_t['cantidad'])
-        ops_d = ops_t.groupby('fecha')['cantidad_neta'].sum()
-        tenencias = ops_d.cumsum().reindex(patrimonio.index, method='ffill').fillna(0)
-        if isinstance(precios_historicos, pd.DataFrame) and ticker in precios_historicos.columns:
-            precio_s = precios_historicos[ticker]
-        elif isinstance(precios_historicos, pd.Series) and precios_historicos.name == ticker:
-            precio_s = precios_historicos
+
+    # Separar tickers USD y ARS para descargar por separado
+    tickers_usd = [t for t in df_ops['ticker'].unique() if not t.endswith('.BA')]
+    tickers_ars = [t for t in df_ops['ticker'].unique() if t.endswith('.BA')]
+    start_date  = df_ops['fecha'].min()
+    rango       = pd.date_range(start=start_date, end=date.today())
+    patrimonio  = pd.DataFrame(index=rango)
+
+    def descargar_precios(tickers):
+        if not tickers: return pd.DataFrame()
+        try:
+            raw = yf.download(tickers, start=start_date, progress=False, auto_adjust=True)
+            # yf devuelve MultiIndex cuando son varios tickers
+            if isinstance(raw.columns, pd.MultiIndex):
+                close = raw['Close']
+            else:
+                close = raw[['Close']].rename(columns={'Close': tickers[0]}) if len(tickers) == 1 else raw
+            # Eliminar duplicados de índice
+            close = close[~close.index.duplicated(keep='first')]
+            return close
+        except:
+            return pd.DataFrame()
+
+    precios_usd = descargar_precios(tickers_usd)
+    precios_ars = descargar_precios(tickers_ars)
+
+    for ticker in df_ops['ticker'].unique():
+        ops_t = df_ops[df_ops['ticker'] == ticker].copy()
+        ops_t['cantidad_neta'] = ops_t['cantidad'].where(ops_t['tipo'] == 'Compra', -ops_t['cantidad'])
+        ops_d    = ops_t.groupby('fecha')['cantidad_neta'].sum()
+        tenencias = ops_d.cumsum().reindex(rango, method='ffill').fillna(0)
+
+        # Obtener serie de precios del DataFrame correcto
+        es_ars = ticker.endswith('.BA')
+        df_precios = precios_ars if es_ars else precios_usd
+
+        if not df_precios.empty and ticker in df_precios.columns:
+            precio_s = df_precios[ticker].reindex(rango)
+            # Clave del fix: ffill mantiene último precio conocido en fines de semana/feriados
+            # Solo llenamos hacia adelante (nunca hacia atrás, para no inventar precios antes de que existiera)
+            precio_s = precio_s.ffill()
+            # Para días anteriores a la primera cotización, dejamos 0 (tenencias también son 0 ahí)
+            precio_s = precio_s.fillna(0)
         else:
-            precio_s = 0
-        valor = tenencias * precio_s.reindex(patrimonio.index, method='ffill') if not isinstance(precio_s, int) else tenencias * 0
-        if ticker.endswith('.BA'): valor = valor / precio_dolar
+            precio_s = pd.Series(0, index=rango)
+
+        valor = tenencias * precio_s
+        if es_ars:
+            valor = valor / precio_dolar  # conversión ARS → USD al tipo actual (aproximado)
+
         patrimonio[ticker] = valor
+
+    # Suma solo donde tenemos datos reales (ignora NaN, no los convierte a 0)
     patrimonio['Total USD'] = patrimonio.sum(axis=1)
-    return patrimonio[['Total USD']].reset_index().rename(columns={'index':'Fecha'})
+
+    # Filtrar días donde el total es 0 al inicio (antes de cualquier compra)
+    primera_compra = df_ops['fecha'].min()
+    resultado = patrimonio[['Total USD']].reset_index().rename(columns={'index': 'Fecha'})
+    resultado = resultado[resultado['Fecha'] >= primera_compra]
+
+    return resultado
 
 
 # ── LOAD DATA ─────────────────────────────────────────────────────
@@ -233,7 +268,7 @@ with st.sidebar:
     st.markdown(f"""
         <div style="padding:8px 0 20px">
             <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;
-                        color:#334155;font-family:'IBM Plex Mono',monospace;margin-bottom:4px">
+                        color:#334155;font-family:'JetBrains Mono',monospace;margin-bottom:4px">
                 Usuario
             </div>
             <div style="font-size:1.05rem;font-weight:600;color:#e2e8f0">
@@ -249,7 +284,7 @@ with st.sidebar:
     if not posiciones_df.empty and 'valor_mercado_usd' in posiciones_df.columns:
         st.markdown("""
             <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;
-                        color:#334155;font-family:'IBM Plex Mono',monospace;margin-bottom:10px">
+                        color:#334155;font-family:'JetBrains Mono',monospace;margin-bottom:10px">
                 Posiciones
             </div>
         """, unsafe_allow_html=True)
@@ -260,10 +295,10 @@ with st.sidebar:
             st.markdown(f"""
                 <div style="display:flex;justify-content:space-between;align-items:center;
                             padding:6px 0;border-bottom:1px solid #1a2540">
-                    <span style="color:#cbd5e1;font-size:0.82rem;font-family:'IBM Plex Mono',monospace">
+                    <span style="color:#cbd5e1;font-size:0.82rem;font-family:'JetBrains Mono',monospace">
                         {row['ticker']}
                     </span>
-                    <span style="color:{color};font-size:0.75rem;font-family:'IBM Plex Mono',monospace">
+                    <span style="color:{color};font-size:0.75rem;font-family:'JetBrains Mono',monospace">
                         {sign}{rent:.1f}%
                     </span>
                 </div>
@@ -275,7 +310,7 @@ with col_title:
     st.markdown(f"""
         <div style="padding-bottom:4px">
             <h1 style="margin:0">Portfolio Dashboard</h1>
-            <div style="color:#475569;font-size:0.85rem;font-family:'IBM Plex Mono',monospace;margin-top:4px">
+            <div style="color:#475569;font-size:0.85rem;font-family:'JetBrains Mono',monospace;margin-top:4px">
                 {st.session_state.user[1]} · actualizado {date.today().strftime('%d %b %Y')}
             </div>
         </div>
@@ -346,7 +381,7 @@ with c1:
             color_discrete_sequence=PIE_COLORS,
         )
         fig_pie.update_traces(
-            textfont=dict(family="IBM Plex Mono", size=11, color="#cbd5e1"),
+            textfont=dict(family="JetBrains Mono", size=11, color="#cbd5e1"),
             marker=dict(line=dict(color="#070c18", width=2)),
             hovertemplate="<b>%{label}</b><br>US$ %{value:,.2f}<br>%{percent}<extra></extra>",
         )
@@ -354,14 +389,14 @@ with c1:
             **{k: v for k, v in dict(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#64748b", family="IBM Plex Mono"),
+                font=dict(color="#64748b", family="JetBrains Mono"),
                 legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#94a3b8", size=11)),
                 margin=dict(l=16, r=16, t=40, b=16),
-                title=dict(text="Diversificación por activo", font=dict(color="#64748b", size=12, family="Syne")),
+                title=dict(text="Diversificación por activo", font=dict(color="#64748b", size=12, family="DM Sans")),
                 annotations=[dict(
                     text=f"<b>US$ {valor_acciones_usd:,.0f}</b>",
                     x=0.5, y=0.5, font_size=14,
-                    font_color="#f1f5f9", font_family="IBM Plex Mono",
+                    font_color="#f1f5f9", font_family="JetBrains Mono",
                     showarrow=False
                 )],
             ).items()},
@@ -389,10 +424,10 @@ with c2:
             name='Patrimonio'
         ))
         fig_ev.update_layout(
-            title=dict(text="Evolución histórica (USD)", font=dict(color="#64748b", size=12, family="Syne")),
+            title=dict(text="Evolución histórica (USD)", font=dict(color="#64748b", size=12, family="DM Sans")),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="#0a0f1e",
-            font=dict(color="#64748b", family="IBM Plex Mono"),
+            font=dict(color="#64748b", family="JetBrains Mono"),
             xaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540", tickfont=dict(color="#475569", size=10)),
             yaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540", tickfont=dict(color="#475569", size=10), tickprefix="$"),
             showlegend=False,
@@ -488,7 +523,7 @@ if not operaciones_df.empty:
     for col, lbl in zip(cols_h, labels):
         col.markdown(
             f'<span style="font-size:0.65rem;text-transform:uppercase;'
-            f'letter-spacing:1px;color:#334155;font-family:IBM Plex Mono,monospace">{lbl}</span>',
+            f'letter-spacing:1px;color:#334155;font-family:JetBrains Mono,monospace">{lbl}</span>',
             unsafe_allow_html=True
         )
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
@@ -496,13 +531,13 @@ if not operaciones_df.empty:
     for _, row in df_hist.iterrows():
         cols = st.columns([0.5, 1, 1.2, 0.8, 0.7, 1, 1, 0.4])
         tipo_color = "#10b981" if row['tipo'] == 'Compra' else "#ef4444"
-        cols[0].markdown(f'<span style="color:#334155;font-family:IBM Plex Mono,monospace;font-size:0.8rem">{row["id"]}</span>', unsafe_allow_html=True)
-        cols[1].markdown(f'<span style="color:#64748b;font-family:IBM Plex Mono,monospace;font-size:0.8rem">{row["fecha"]}</span>', unsafe_allow_html=True)
-        cols[2].markdown(f'<span style="color:#e2e8f0;font-family:IBM Plex Mono,monospace;font-size:0.85rem;font-weight:500">{row["ticker"]}</span>', unsafe_allow_html=True)
-        cols[3].markdown(f'<span style="color:{tipo_color};font-family:IBM Plex Mono,monospace;font-size:0.8rem">{row["tipo"]}</span>', unsafe_allow_html=True)
-        cols[4].markdown(f'<span style="color:#64748b;font-family:IBM Plex Mono,monospace;font-size:0.8rem">{row["moneda"]}</span>', unsafe_allow_html=True)
-        cols[5].markdown(f'<span style="color:#cbd5e1;font-family:IBM Plex Mono,monospace;font-size:0.8rem">{row["cantidad"]:.4f}</span>', unsafe_allow_html=True)
-        cols[6].markdown(f'<span style="color:#cbd5e1;font-family:IBM Plex Mono,monospace;font-size:0.8rem">${row["precio"]:,.4f}</span>', unsafe_allow_html=True)
+        cols[0].markdown(f'<span style="color:#334155;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["id"]}</span>', unsafe_allow_html=True)
+        cols[1].markdown(f'<span style="color:#64748b;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["fecha"]}</span>', unsafe_allow_html=True)
+        cols[2].markdown(f'<span style="color:#e2e8f0;font-family:JetBrains Mono,monospace;font-size:0.85rem;font-weight:500">{row["ticker"]}</span>', unsafe_allow_html=True)
+        cols[3].markdown(f'<span style="color:{tipo_color};font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["tipo"]}</span>', unsafe_allow_html=True)
+        cols[4].markdown(f'<span style="color:#64748b;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["moneda"]}</span>', unsafe_allow_html=True)
+        cols[5].markdown(f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["cantidad"]:.4f}</span>', unsafe_allow_html=True)
+        cols[6].markdown(f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.8rem">${row["precio"]:,.4f}</span>', unsafe_allow_html=True)
         if cols[7].button("✕", key=f"del_{row['id']}", help="Eliminar operación"):
             eliminar_operacion(row['id'], USER_ID)
             st.rerun()

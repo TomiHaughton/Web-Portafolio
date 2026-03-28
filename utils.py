@@ -6,14 +6,14 @@ import plotly.graph_objects as go
 # ─────────────────────────────────────────────
 DARK_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── BASE ── */
 html, body, .stApp {
     background-color: #070c18 !important;
     color: #e2e8f0 !important;
 }
-*, p, span, div, label { font-family: 'Syne', sans-serif !important; }
+*, p, span, div, label { font-family: 'DM Sans', sans-serif !important; }
 
 /* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
@@ -23,7 +23,7 @@ html, body, .stApp {
 [data-testid="stSidebar"] * { color: #94a3b8 !important; }
 [data-testid="stSidebar"] [data-testid="stMetricValue"] {
     color: #10b981 !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
     font-size: 1.3rem !important;
 }
 [data-testid="stSidebar"] [data-testid="stMetricLabel"] {
@@ -35,21 +35,21 @@ html, body, .stApp {
 
 /* ── HEADINGS ── */
 h1 {
-    font-family: 'Syne', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-weight: 800 !important;
     color: #f1f5f9 !important;
     font-size: 2rem !important;
     letter-spacing: -0.5px !important;
 }
 h2 {
-    font-family: 'Syne', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-weight: 600 !important;
     color: #e2e8f0 !important;
     font-size: 1.25rem !important;
     letter-spacing: -0.3px !important;
 }
 h3 {
-    font-family: 'Syne', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-weight: 500 !important;
     color: #cbd5e1 !important;
 }
@@ -66,14 +66,14 @@ h3 {
     font-size: 0.68rem !important;
     text-transform: uppercase !important;
     letter-spacing: 1.2px !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
 }
 [data-testid="stMetricValue"] {
     color: #f1f5f9 !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
     font-weight: 500 !important;
 }
-[data-testid="stMetricDelta"] { font-family: 'IBM Plex Mono', monospace !important; }
+[data-testid="stMetricDelta"] { font-family: 'JetBrains Mono', monospace !important; }
 
 /* ── DATAFRAME ── */
 .stDataFrame {
@@ -87,13 +87,13 @@ h3 {
     font-size: 0.68rem !important;
     text-transform: uppercase !important;
     letter-spacing: 1px !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
     border-bottom: 1px solid #1a2540 !important;
 }
 .stDataFrame tbody tr td {
     background: #070c18 !important;
     color: #cbd5e1 !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
     font-size: 0.82rem !important;
     border-bottom: 1px solid #0f1729 !important;
 }
@@ -105,7 +105,7 @@ h3 {
     color: #64748b !important;
     border: 1px solid #1e2e4a !important;
     border-radius: 8px !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
     font-size: 0.78rem !important;
     transition: all 0.18s ease !important;
 }
@@ -128,7 +128,7 @@ h3 {
     color: #e2e8f0 !important;
     border: 1px solid #1e2e4a !important;
     border-radius: 8px !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
 }
 .stTextInput > div > div > input:focus,
 .stNumberInput > div > div > input:focus {
@@ -150,7 +150,7 @@ h3 {
     background: linear-gradient(135deg, #059669, #10b981) !important;
     color: #f0fdf4 !important;
     border: none !important;
-    font-family: 'Syne', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
     font-weight: 600 !important;
     font-size: 0.9rem !important;
     letter-spacing: 0.3px !important;
@@ -165,7 +165,7 @@ h3 {
     background: #0f1729 !important;
     color: #e2e8f0 !important;
     border: 1px solid #1e2e4a !important;
-    font-family: 'IBM Plex Mono', monospace !important;
+    font-family: 'JetBrains Mono', monospace !important;
 }
 
 /* ── DIVIDER ── */
@@ -223,7 +223,7 @@ section.main > div { animation: fadeUp 0.35s ease-out; }
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="#0a0f1e",
-    font=dict(color="#64748b", family="IBM Plex Mono"),
+    font=dict(color="#64748b", family="JetBrains Mono"),
     colorway=["#10b981","#3b82f6","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec4899","#84cc16"],
     xaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540", tickfont=dict(color="#475569", size=11)),
     yaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540", tickfont=dict(color="#475569", size=11)),
@@ -257,7 +257,7 @@ def metric_card(label, value, subtitle=None, color="default"):
     accent, bg, _ = palettes.get(color, palettes["default"])
     sub_html = (
         f'<div style="font-size:0.72rem;color:#475569;margin-top:6px;'
-        f'font-family:IBM Plex Mono,monospace">{subtitle}</div>'
+        f'font-family:JetBrains Mono,monospace">{subtitle}</div>'
     ) if subtitle else ""
     st.markdown(f"""
         <div style="
@@ -273,14 +273,14 @@ def metric_card(label, value, subtitle=None, color="default"):
                 text-transform:uppercase;
                 letter-spacing:1.4px;
                 color:#475569;
-                font-family:'IBM Plex Mono',monospace;
+                font-family:'JetBrains Mono',monospace;
                 margin-bottom:8px;
             ">{label}</div>
             <div style="
                 font-size:1.45rem;
                 font-weight:500;
                 color:#f1f5f9;
-                font-family:'IBM Plex Mono',monospace;
+                font-family:'JetBrains Mono',monospace;
                 line-height:1.2;
             ">{value}</div>
             {sub_html}
@@ -292,7 +292,7 @@ def section_header(title, subtitle=None):
     """Render a styled section header."""
     sub = (
         f'<div style="color:#475569;font-size:0.82rem;margin-top:3px;'
-        f'font-family:Syne,sans-serif">{subtitle}</div>'
+        f'font-family:DM Sans,sans-serif">{subtitle}</div>'
     ) if subtitle else ""
     st.markdown(f"""
         <div style="margin:36px 0 16px">
@@ -300,7 +300,7 @@ def section_header(title, subtitle=None):
                 font-size:1.05rem;
                 font-weight:600;
                 color:#e2e8f0;
-                font-family:'Syne',sans-serif;
+                font-family:'DM Sans',sans-serif;
                 letter-spacing:-0.2px;
                 border-left:3px solid #10b981;
                 padding-left:12px;
@@ -321,11 +321,11 @@ def badge(text, color="green"):
     return (
         f'<span style="background:{bg};color:{fg};border:1px solid {fg}33;'
         f'border-radius:5px;padding:2px 8px;font-size:0.72rem;'
-        f'font-family:IBM Plex Mono,monospace;font-weight:500">{text}</span>'
+        f'font-family:JetBrains Mono,monospace;font-weight:500">{text}</span>'
     )
 
 
 def apply_plotly_style(fig, title=""):
     """Apply the dark theme to any plotly figure."""
-    fig.update_layout(title=dict(text=title, font=dict(color="#94a3b8", size=13, family="Syne")), **PLOTLY_LAYOUT)
+    fig.update_layout(title=dict(text=title, font=dict(color="#94a3b8", size=13, family="DM Sans")), **PLOTLY_LAYOUT)
     return fig
