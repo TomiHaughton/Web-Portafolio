@@ -492,7 +492,7 @@ if not posiciones_df.empty:
 
     styled = (
         df_show.style
-        .applymap(color_ganancia, subset=['Ganancia (USD)','Rent %'])
+        .map(color_ganancia, subset=['Ganancia (USD)','Rent %'])
         .format({
             'Cantidad':    '{:,.4f}',
             'PPP':         '${:,.4f}',
