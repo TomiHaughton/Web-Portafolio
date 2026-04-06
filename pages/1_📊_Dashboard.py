@@ -6,7 +6,7 @@ import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
-from utils import apply_styles, metric_card, section_header, apply_plotly_style, badge, PIE_COLORS
+from utils import apply_styles, metric_card, section_header, apply_plotly_style, badge, PIE_COLORS, portfolio_selector_sidebar, ver_portafolios, crear_portafolio, eliminar_portafolio, renombrar_portafolio
 
 # ── Auth ──────────────────────────────────────────────────────────
 if 'user' not in st.session_state or st.session_state.user is None:
@@ -29,13 +29,13 @@ def conectar_db():
     )
 
 # ── DATA FUNCTIONS ────────────────────────────────────────────────
-def anadir_operacion(fecha, ticker, tipo, cantidad, precio, moneda, user_id):
+def anadir_operacion(fecha, ticker, tipo, cantidad, precio, moneda, user_id, portfolio_id=None):
     conn = conectar_db()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO operaciones (fecha, ticker, tipo, cantidad, precio, moneda, user_id) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        (fecha, ticker, tipo, cantidad, precio, moneda, user_id)
+        "INSERT INTO operaciones (fecha, ticker, tipo, cantidad, precio, moneda, user_id, portfolio_id) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (fecha, ticker, tipo, cantidad, precio, moneda, user_id, portfolio_id)
     )
     conn.commit(); conn.close()
 
@@ -45,12 +45,18 @@ def eliminar_operacion(op_id, user_id):
     c.execute("DELETE FROM operaciones WHERE id=%s AND user_id=%s", (op_id, user_id))
     conn.commit(); conn.close()
 
-def ver_operaciones(user_id):
+def ver_operaciones(user_id, portfolio_id=None):
     conn = conectar_db()
-    df = pd.read_sql_query(
-        "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
-        conn, params=(user_id,)
-    )
+    if portfolio_id is None:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id,)
+        )
+    else:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s AND portfolio_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id, portfolio_id)
+        )
     conn.close()
     return df
 
@@ -250,7 +256,11 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
 
 # ── LOAD DATA ─────────────────────────────────────────────────────
 precio_dolar_hoy, fuente_dolar = obtener_dolar_argentina()
-operaciones_df = ver_operaciones(USER_ID)
+
+# Portfolio selector runs first (sets session_state)
+portfolio_id_sel, portfolio_label_sel = portfolio_selector_sidebar(USER_ID)
+
+operaciones_df = ver_operaciones(USER_ID, portfolio_id_sel)
 posiciones_df, ganancia_realizada_total, _ = calcular_posiciones(operaciones_df, precio_dolar_hoy)
 total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID, precio_dolar_hoy)
 saldo_efectivo_usd, saldo_efectivo_ars = calcular_efectivo_actual(USER_ID)
@@ -266,9 +276,9 @@ rentabilidad       = (beneficio_total / capital_neto * 100) if capital_neto > 0 
 # ── SIDEBAR ───────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(f"""
-        <div style="padding:8px 0 20px">
-            <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;
-                        color:#334155;font-family:'JetBrains Mono',monospace;margin-bottom:4px">
+        <div style="padding:8px 0 16px">
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;
+                        color:#334155;font-family:JetBrains Mono,monospace;margin-bottom:4px">
                 Usuario
             </div>
             <div style="font-size:1.05rem;font-weight:600;color:#e2e8f0">
@@ -276,29 +286,61 @@ with st.sidebar:
             </div>
         </div>
     """, unsafe_allow_html=True)
-
     st.metric("Dólar Cripto", f"${precio_dolar_hoy:,.0f} ARS")
     st.caption(f"Fuente: {fuente_dolar}")
     st.divider()
 
+    # ── Gestión de portafolios ─────────────────────────────────────
+    with st.expander("⚙️  Gestionar portafolios"):
+        portfolios_df = ver_portafolios(USER_ID)
+
+        # Crear nuevo
+        with st.form("form_crear_portfolio", clear_on_submit=True):
+            np_nombre = st.text_input("Nombre", placeholder="Ej: Largo plazo")
+            np_desc   = st.text_input("Descripción (opcional)", placeholder="Jubilación, acciones growth…")
+            if st.form_submit_button("Crear", use_container_width=True) and np_nombre:
+                crear_portafolio(USER_ID, np_nombre, np_desc)
+                st.success(f"✓ Portafolio '{np_nombre}' creado.")
+                st.rerun()
+
+        # Listar y editar existentes
+        if not portfolios_df.empty:
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            for _, pf in portfolios_df.iterrows():
+                with st.expander(f"📁 {pf['nombre']}"):
+                    with st.form(f"edit_pf_{pf['id']}", clear_on_submit=False):
+                        e_nombre = st.text_input("Nombre", value=pf['nombre'], key=f"en_{pf['id']}")
+                        e_desc   = st.text_input("Descripción", value=pf['descripcion'] or "", key=f"ed_{pf['id']}")
+                        c_save, c_del = st.columns(2)
+                        if c_save.form_submit_button("Guardar"):
+                            renombrar_portafolio(pf['id'], e_nombre, e_desc, USER_ID)
+                            st.rerun()
+                        if c_del.form_submit_button("Eliminar", type="primary"):
+                            eliminar_portafolio(pf['id'], USER_ID)
+                            st.session_state['portfolio_label'] = "Todos (consolidado)"
+                            st.rerun()
+
+    st.divider()
+
+    # ── Mini posiciones ────────────────────────────────────────────
     if not posiciones_df.empty and 'valor_mercado_usd' in posiciones_df.columns:
         st.markdown("""
-            <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;
-                        color:#334155;font-family:'JetBrains Mono',monospace;margin-bottom:10px">
-                Posiciones
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:1.5px;
+                        color:#334155;font-family:JetBrains Mono,monospace;margin-bottom:8px">
+                Posiciones activas
             </div>
         """, unsafe_allow_html=True)
         for _, row in posiciones_df.sort_values('valor_mercado_usd', ascending=False).iterrows():
-            rent = row.get('rentabilidad_%', 0)
+            rent  = row.get('rentabilidad_%', 0)
             color = "#10b981" if rent >= 0 else "#ef4444"
             sign  = "+" if rent >= 0 else ""
             st.markdown(f"""
                 <div style="display:flex;justify-content:space-between;align-items:center;
-                            padding:6px 0;border-bottom:1px solid #1a2540">
-                    <span style="color:#cbd5e1;font-size:0.82rem;font-family:'JetBrains Mono',monospace">
+                            padding:5px 0;border-bottom:1px solid #1a2540">
+                    <span style="color:#cbd5e1;font-size:0.82rem;font-family:JetBrains Mono,monospace">
                         {row['ticker']}
                     </span>
-                    <span style="color:{color};font-size:0.75rem;font-family:'JetBrains Mono',monospace">
+                    <span style="color:{color};font-size:0.75rem;font-family:JetBrains Mono,monospace">
                         {sign}{rent:.1f}%
                     </span>
                 </div>
@@ -452,12 +494,26 @@ CRIPTOS = {"BTC","ETH","SOL","USDT","BNB","XRP","ADA","DOGE","SHIB","DOT","DAI",
 
 with st.form("operacion_form", clear_on_submit=True):
     c1, c2, c3, c4, c5 = st.columns([1.2, 1, 1, 1.3, 1.3])
-    with c1: fecha_op   = st.date_input("Fecha", value=date.today())
-    with c2: ticker_op  = st.text_input("Ticker", placeholder="AAPL")
-    with c3: tipo_op    = st.selectbox("Tipo", ["Compra", "Venta"])
-    with c4: moneda_op  = st.selectbox("Moneda", ["USD", "ARS"])
-    with c5: cantidad_op= st.number_input("Cantidad", min_value=0.0, step=0.0001, format="%.4f")
-    precio_op = st.number_input("Precio Unitario", min_value=0.0, step=0.0001, format="%.4f")
+    with c1: fecha_op    = st.date_input("Fecha", value=date.today())
+    with c2: ticker_op   = st.text_input("Ticker", placeholder="AAPL")
+    with c3: tipo_op     = st.selectbox("Tipo", ["Compra", "Venta"])
+    with c4: moneda_op   = st.selectbox("Moneda", ["USD", "ARS"])
+    with c5: cantidad_op = st.number_input("Cantidad", min_value=0.0, step=0.0001, format="%.4f")
+
+    pf_col, precio_col = st.columns([1, 2])
+    with precio_col:
+        precio_op = st.number_input("Precio Unitario", min_value=0.0, step=0.0001, format="%.4f")
+    with pf_col:
+        portfolios_form = ver_portafolios(USER_ID)
+        if not portfolios_form.empty:
+            pf_opts   = {"Sin asignar": None}
+            for _, pf in portfolios_form.iterrows():
+                pf_opts[pf['nombre']] = pf['id']
+            pf_sel_label = st.selectbox("Portafolio", list(pf_opts.keys()))
+            pf_sel_id    = pf_opts[pf_sel_label]
+        else:
+            st.info("Crea un portafolio primero en el menú lateral.")
+            pf_sel_id = None
 
     submitted = st.form_submit_button("Confirmar Operación", use_container_width=True)
     if submitted:
@@ -466,8 +522,8 @@ with st.form("operacion_form", clear_on_submit=True):
         else:
             tk = ticker_op.upper()
             if tk in CRIPTOS: tk = f"{tk}-USD"
-            anadir_operacion(fecha_op, tk, tipo_op, cantidad_op, precio_op, moneda_op, USER_ID)
-            st.success(f"✓ Operación registrada — {tipo_op} {cantidad_op:.4f} {tk}")
+            anadir_operacion(fecha_op, tk, tipo_op, cantidad_op, precio_op, moneda_op, USER_ID, pf_sel_id)
+            st.success(f"✓ Operación registrada — {tipo_op} {cantidad_op:.4f} {tk} → {pf_sel_label}")
             st.rerun()
 
 st.divider()

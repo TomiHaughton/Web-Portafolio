@@ -329,3 +329,102 @@ def apply_plotly_style(fig, title=""):
     """Apply the dark theme to any plotly figure."""
     fig.update_layout(title=dict(text=title, font=dict(color="#94a3b8", size=13, family="DM Sans")), **PLOTLY_LAYOUT)
     return fig
+
+
+# ─────────────────────────────────────────────
+#  PORTFOLIO HELPERS
+# ─────────────────────────────────────────────
+import psycopg2
+import pandas as pd
+
+def _conectar():
+    return psycopg2.connect(
+        host=st.secrets["connections"]["supabase"]["host"],
+        database=st.secrets["connections"]["supabase"]["database"],
+        user=st.secrets["connections"]["supabase"]["username"],
+        password=st.secrets["connections"]["supabase"]["password"],
+        port=st.secrets["connections"]["supabase"]["port"]
+    )
+
+def ver_portafolios(user_id):
+    conn = _conectar()
+    df = pd.read_sql_query(
+        "SELECT * FROM portafolios WHERE user_id=%s ORDER BY id ASC",
+        conn, params=(user_id,)
+    )
+    conn.close()
+    return df
+
+def crear_portafolio(user_id, nombre, descripcion=""):
+    conn = _conectar()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO portafolios (user_id, nombre, descripcion) VALUES (%s,%s,%s) RETURNING id",
+        (user_id, nombre, descripcion)
+    )
+    new_id = c.fetchone()[0]
+    conn.commit(); conn.close()
+    return new_id
+
+def eliminar_portafolio(portfolio_id, user_id):
+    conn = _conectar()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE operaciones SET portfolio_id=NULL WHERE portfolio_id=%s AND user_id=%s",
+        (portfolio_id, user_id)
+    )
+    c.execute(
+        "DELETE FROM portafolios WHERE id=%s AND user_id=%s",
+        (portfolio_id, user_id)
+    )
+    conn.commit(); conn.close()
+
+def renombrar_portafolio(portfolio_id, nuevo_nombre, nueva_desc, user_id):
+    conn = _conectar()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE portafolios SET nombre=%s, descripcion=%s WHERE id=%s AND user_id=%s",
+        (nuevo_nombre, nueva_desc, portfolio_id, user_id)
+    )
+    conn.commit(); conn.close()
+
+
+def portfolio_selector_sidebar(user_id):
+    """
+    Renders the portfolio selector in the sidebar.
+    Returns (portfolio_id_or_None, label).
+    None means 'Todos' (consolidated view).
+    """
+    portfolios = ver_portafolios(user_id)
+
+    if portfolios.empty:
+        st.session_state['portfolio_id']    = None
+        st.session_state['portfolio_label'] = "Sin portafolio"
+        return None, "Sin portafolio"
+
+    opciones = {"Todos (consolidado)": None}
+    for _, p in portfolios.iterrows():
+        opciones[p['nombre']] = p['id']
+
+    labels = list(opciones.keys())
+    current_label = st.session_state.get('portfolio_label', labels[0])
+    if current_label not in labels:
+        current_label = labels[0]
+
+    st.sidebar.markdown("""
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:1.4px;
+                    color:#334155;font-family:JetBrains Mono,monospace;margin-bottom:6px">
+            Portafolio
+        </div>
+    """, unsafe_allow_html=True)
+
+    seleccion = st.sidebar.radio(
+        "portafolio_radio",
+        labels,
+        index=labels.index(current_label),
+        label_visibility="collapsed"
+    )
+    st.session_state['portfolio_label'] = seleccion
+    st.session_state['portfolio_id']    = opciones[seleccion]
+
+    return opciones[seleccion], seleccion

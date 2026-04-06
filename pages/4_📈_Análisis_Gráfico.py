@@ -4,7 +4,7 @@ import pandas as pd
 import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
-from utils import apply_styles, metric_card, section_header, apply_plotly_style
+from utils import apply_styles, metric_card, section_header, apply_plotly_style, portfolio_selector_sidebar
 
 if 'user' not in st.session_state or st.session_state.user is None:
     st.error("Debes iniciar sesión."); st.stop()
@@ -22,12 +22,18 @@ def conectar_db():
         port=st.secrets["connections"]["supabase"]["port"]
     )
 
-def ver_operaciones(user_id):
+def ver_operaciones(user_id, portfolio_id=None):
     conn = conectar_db()
-    df = pd.read_sql_query(
-        "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
-        conn, params=(user_id,)
-    )
+    if portfolio_id is None:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id,)
+        )
+    else:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s AND portfolio_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id, portfolio_id)
+        )
     conn.close()
     return df
 
@@ -71,6 +77,9 @@ def calcular(df_ops):
 
     return abiertas, pos[['ticker','realizado']]
 
+# ── PORTFOLIO SELECTOR ───────────────────────────────────────────
+portfolio_id_sel, portfolio_label_sel = portfolio_selector_sidebar(USER_ID)
+
 # ── HEADER ────────────────────────────────────────────────────────
 st.markdown("<h1>Análisis Gráfico</h1>", unsafe_allow_html=True)
 st.markdown(
@@ -79,7 +88,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-ops = ver_operaciones(USER_ID)
+ops = ver_operaciones(USER_ID, portfolio_id_sel)
 abiertas, realizadas = calcular(ops)
 
 if not ops.empty:

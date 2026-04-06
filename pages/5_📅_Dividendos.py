@@ -2,7 +2,7 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 import yfinance as yf
-from utils import apply_styles, metric_card, section_header
+from utils import apply_styles, metric_card, section_header, portfolio_selector_sidebar
 
 if 'user' not in st.session_state or st.session_state.user is None:
     st.error("Debes iniciar sesión."); st.stop()
@@ -20,12 +20,18 @@ def conectar_db():
         port=st.secrets["connections"]["supabase"]["port"]
     )
 
-def ver_operaciones(user_id):
+def ver_operaciones(user_id, portfolio_id=None):
     conn = conectar_db()
-    df = pd.read_sql_query(
-        "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
-        conn, params=(user_id,)
-    )
+    if portfolio_id is None:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id,)
+        )
+    else:
+        df = pd.read_sql_query(
+            "SELECT * FROM operaciones WHERE user_id=%s AND portfolio_id=%s ORDER BY fecha ASC",
+            conn, params=(user_id, portfolio_id)
+        )
     conn.close()
     return df
 
@@ -46,6 +52,9 @@ def info_divs(tickers):
             d[t] = {'rate': 0, 'ex': 'Err', 'pay': 'Err', 'yield': 0}
     return d
 
+# ── PORTFOLIO SELECTOR ───────────────────────────────────────────
+portfolio_id_sel, portfolio_label_sel = portfolio_selector_sidebar(USER_ID)
+
 # ── HEADER ────────────────────────────────────────────────────────
 st.markdown("<h1>Proyección de Dividendos</h1>", unsafe_allow_html=True)
 st.markdown(
@@ -54,7 +63,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-ops = ver_operaciones(USER_ID)
+ops = ver_operaciones(USER_ID, portfolio_id_sel)
 
 if not ops.empty:
     ops['cant_neta'] = ops.apply(lambda x: x['cantidad'] if x['tipo']=='Compra' else -x['cantidad'], axis=1)
