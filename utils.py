@@ -428,3 +428,70 @@ def portfolio_selector_sidebar(user_id):
     st.session_state['portfolio_id']    = opciones[seleccion]
 
     return opciones[seleccion], seleccion
+
+
+# ─────────────────────────────────────────────
+#  EFECTIVO HELPERS
+# ─────────────────────────────────────────────
+
+def get_efectivo(user_id, portfolio_id=None):
+    """Devuelve (saldo_usd, saldo_ars) para el usuario/portafolio."""
+    conn = _conectar()
+    try:
+        if portfolio_id is None:
+            df = pd.read_sql_query(
+                "SELECT saldo_usd, saldo_ars FROM efectivo WHERE user_id=%s AND portfolio_id IS NULL",
+                conn, params=(user_id,)
+            )
+        else:
+            df = pd.read_sql_query(
+                "SELECT saldo_usd, saldo_ars FROM efectivo WHERE user_id=%s AND portfolio_id=%s",
+                conn, params=(user_id, portfolio_id)
+            )
+        conn.close()
+        if df.empty:
+            return 0.0, 0.0
+        return float(df.iloc[0]['saldo_usd']), float(df.iloc[0]['saldo_ars'])
+    except:
+        conn.close()
+        return 0.0, 0.0
+
+
+def set_efectivo(user_id, saldo_usd, saldo_ars, portfolio_id=None):
+    """Upsert del efectivo — crea o sobreescribe."""
+    conn = _conectar()
+    c = conn.cursor()
+    try:
+        if portfolio_id is None:
+            c.execute(
+                "SELECT id FROM efectivo WHERE user_id=%s AND portfolio_id IS NULL",
+                (user_id,)
+            )
+        else:
+            c.execute(
+                "SELECT id FROM efectivo WHERE user_id=%s AND portfolio_id=%s",
+                (user_id, portfolio_id)
+            )
+        row = c.fetchone()
+        if row:
+            if portfolio_id is None:
+                c.execute(
+                    "UPDATE efectivo SET saldo_usd=%s, saldo_ars=%s WHERE user_id=%s AND portfolio_id IS NULL",
+                    (saldo_usd, saldo_ars, user_id)
+                )
+            else:
+                c.execute(
+                    "UPDATE efectivo SET saldo_usd=%s, saldo_ars=%s WHERE user_id=%s AND portfolio_id=%s",
+                    (saldo_usd, saldo_ars, user_id, portfolio_id)
+                )
+        else:
+            c.execute(
+                "INSERT INTO efectivo (user_id, portfolio_id, saldo_usd, saldo_ars) VALUES (%s,%s,%s,%s)",
+                (user_id, portfolio_id, saldo_usd, saldo_ars)
+            )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

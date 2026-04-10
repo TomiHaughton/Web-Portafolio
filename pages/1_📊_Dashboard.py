@@ -6,7 +6,7 @@ import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
-from utils import apply_styles, metric_card, section_header, apply_plotly_style, badge, PIE_COLORS, portfolio_selector_sidebar, ver_portafolios, crear_portafolio, eliminar_portafolio, renombrar_portafolio
+from utils import apply_styles, metric_card, section_header, apply_plotly_style, badge, PIE_COLORS, portfolio_selector_sidebar, ver_portafolios, crear_portafolio, eliminar_portafolio, renombrar_portafolio, get_efectivo, set_efectivo
 
 # ── Auth ──────────────────────────────────────────────────────────
 if 'user' not in st.session_state or st.session_state.user is None:
@@ -60,23 +60,18 @@ def ver_operaciones(user_id, portfolio_id=None):
     conn.close()
     return df
 
-def obtener_aportaciones_retiros(user_id, precio_dolar):
-    try:
-        conn = conectar_db()
-        df = pd.read_sql_query(
-            "SELECT tipo, monto, moneda FROM finanzas_personales "
-            "WHERE categoria='Inversiones' AND user_id=%s",
-            conn, params=(user_id,)
-        )
-        conn.close()
-        if df.empty: return 0, 0
-        df['moneda'] = df['moneda'].fillna('ARS')
-        df['monto_usd'] = df.apply(
-            lambda x: x['monto'] if x['moneda'] == 'USD' else x['monto'] / precio_dolar, axis=1
-        )
-        return df[df['tipo']=='Gasto']['monto_usd'].sum(), df[df['tipo']=='Ingreso']['monto_usd'].sum()
-    except:
-        return 0, 0
+def calcular_capital_neto(df_ops, precio_dolar):
+    """Capital neto = costo total compras - ingresos ventas, en USD."""
+    if df_ops.empty: return 0.0
+    df = df_ops.copy()
+    df['moneda'] = df['moneda'].fillna('USD')
+    df['monto'] = df['cantidad'] * df['precio']
+    df['monto_usd'] = df.apply(
+        lambda r: r['monto'] / precio_dolar if r['moneda'] == 'ARS' else r['monto'], axis=1
+    )
+    compras = df[df['tipo']=='Compra']['monto_usd'].sum()
+    ventas  = df[df['tipo']=='Venta']['monto_usd'].sum()
+    return compras - ventas
 
 @st.cache_data(ttl=300)
 def obtener_dolar_argentina():
@@ -103,42 +98,7 @@ def obtener_datos_mercado(tickers):
             precios[ticker] = 0.0
     return precios
 
-@st.cache_data(ttl=60)
-def calcular_efectivo_actual(user_id):
-    saldo_usd, saldo_ars = 0.0, 0.0
-    try:
-        conn = conectar_db()
-        df_fin = pd.read_sql_query(
-            "SELECT tipo, categoria, monto, moneda FROM finanzas_personales WHERE user_id=%s",
-            conn, params=(user_id,)
-        )
-        df_ops = pd.read_sql_query(
-            "SELECT tipo, cantidad, precio, moneda FROM operaciones WHERE user_id=%s",
-            conn, params=(user_id,)
-        )
-        conn.close()
-        df_fin['moneda'] = df_fin['moneda'].fillna('ARS')
-        df_ops['moneda'] = df_ops['moneda'].fillna('USD')
-        for _, row in df_fin.iterrows():
-            m, mon = row['monto'], row['moneda']
-            if row['tipo'] == 'Ingreso' and row['categoria'] in ('Inversiones', 'Dividendo Recibido'):
-                if mon == 'USD': saldo_usd += m
-                else: saldo_ars += m
-            elif row['tipo'] == 'Gasto' and row['categoria'] == 'Inversiones':
-                if mon == 'USD': saldo_usd += m
-                else: saldo_ars += m
-        for _, row in df_ops.iterrows():
-            costo = row['cantidad'] * row['precio']
-            mon = row['moneda']
-            if row['tipo'] == 'Compra':
-                if mon == 'USD': saldo_usd -= costo
-                else: saldo_ars -= costo
-            else:
-                if mon == 'USD': saldo_usd += costo
-                else: saldo_ars += costo
-        return saldo_usd, saldo_ars
-    except:
-        return 0.0, 0.0
+# efectivo ahora se maneja con get_efectivo/set_efectivo desde utils
 
 def calcular_posiciones(df_ops, precio_dolar):
     if df_ops.empty: return pd.DataFrame(), 0, pd.DataFrame()
@@ -260,17 +220,16 @@ precio_dolar_hoy, fuente_dolar = obtener_dolar_argentina()
 # Portfolio selector runs first (sets session_state)
 portfolio_id_sel, portfolio_label_sel = portfolio_selector_sidebar(USER_ID)
 
-operaciones_df = ver_operaciones(USER_ID, portfolio_id_sel)
+operaciones_df     = ver_operaciones(USER_ID, portfolio_id_sel)
 posiciones_df, ganancia_realizada_total, _ = calcular_posiciones(operaciones_df, precio_dolar_hoy)
-total_aportado, total_retirado = obtener_aportaciones_retiros(USER_ID, precio_dolar_hoy)
-saldo_efectivo_usd, saldo_efectivo_ars = calcular_efectivo_actual(USER_ID)
+saldo_efectivo_usd, saldo_efectivo_ars = get_efectivo(USER_ID, portfolio_id_sel)
 
 valor_acciones_usd = posiciones_df['valor_mercado_usd'].sum() if 'valor_mercado_usd' in posiciones_df.columns else 0
 valor_ars_en_usd   = saldo_efectivo_ars / precio_dolar_hoy
 patrimonio_total   = valor_acciones_usd + saldo_efectivo_usd + valor_ars_en_usd
 ganancia_no_real   = posiciones_df['ganancia_no_realizada_usd'].sum() if 'ganancia_no_realizada_usd' in posiciones_df.columns else 0
 beneficio_total    = ganancia_no_real + ganancia_realizada_total
-capital_neto       = total_aportado - total_retirado
+capital_neto       = calcular_capital_neto(operaciones_df, precio_dolar_hoy)
 rentabilidad       = (beneficio_total / capital_neto * 100) if capital_neto > 0 else 0
 
 # ── SIDEBAR ───────────────────────────────────────────────────────
@@ -392,12 +351,35 @@ if not operaciones_df.empty or total_aportado > 0 or saldo_efectivo_usd != 0:
     with c1:
         metric_card("Valor en Acciones", f"US$ {valor_acciones_usd:,.2f}", color="default")
     with c2:
-        metric_card("Efectivo USD", f"US$ {saldo_efectivo_usd:,.2f}", color="blue")
+        with st.container():
+            st.markdown('''
+                <div style="background:rgba(59,130,246,0.06);border:1px solid #1a2540;
+                border-left:3px solid #3b82f6;border-radius:12px;padding:18px 20px;min-height:90px">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.4px;
+                color:#475569;font-family:JetBrains Mono,monospace;margin-bottom:6px">Efectivo USD</div>
+                ''', unsafe_allow_html=True)
+            nuevo_usd = st.number_input("usd_input", value=saldo_efectivo_usd,
+                min_value=0.0, step=0.01, format="%.2f",
+                label_visibility="collapsed", key="input_usd")
+            if nuevo_usd != saldo_efectivo_usd:
+                set_efectivo(USER_ID, nuevo_usd, saldo_efectivo_ars, portfolio_id_sel)
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
     with c3:
-        metric_card("Efectivo ARS",
-                    f"AR$ {saldo_efectivo_ars:,.0f}",
-                    subtitle=f"≈ US$ {valor_ars_en_usd:,.2f}",
-                    color="amber")
+        with st.container():
+            st.markdown('''
+                <div style="background:rgba(245,158,11,0.06);border:1px solid #1a2540;
+                border-left:3px solid #f59e0b;border-radius:12px;padding:18px 20px;min-height:90px">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.4px;
+                color:#475569;font-family:JetBrains Mono,monospace;margin-bottom:6px">Efectivo ARS</div>
+                ''', unsafe_allow_html=True)
+            nuevo_ars = st.number_input("ars_input", value=saldo_efectivo_ars,
+                min_value=0.0, step=1.0, format="%.0f",
+                label_visibility="collapsed", key="input_ars")
+            if nuevo_ars != saldo_efectivo_ars:
+                set_efectivo(USER_ID, saldo_efectivo_usd, nuevo_ars, portfolio_id_sel)
+                st.rerun()
+            st.markdown(f'<div style="font-size:0.72rem;color:#475569;margin-top:4px;font-family:JetBrains Mono,monospace">≈ US$ {nuevo_ars/precio_dolar_hoy:,.2f}</div></div>', unsafe_allow_html=True)
     with c4:
         nr_color = "green" if ganancia_no_real >= 0 else "red"
         nr_sign  = "+" if ganancia_no_real >= 0 else ""
