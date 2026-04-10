@@ -1,5 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
+import psycopg2
+import pandas as pd
 
 # ─────────────────────────────────────────────
 #  GLOBAL CSS — inject at the top of every page
@@ -334,8 +336,6 @@ def apply_plotly_style(fig, title=""):
 # ─────────────────────────────────────────────
 #  PORTFOLIO HELPERS
 # ─────────────────────────────────────────────
-import psycopg2
-import pandas as pd
 
 def _conectar():
     return psycopg2.connect(
