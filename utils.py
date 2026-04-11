@@ -9,6 +9,23 @@ import pandas as pd
 DARK_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+/* Force Material Symbols to render as icons not text */
+.material-symbols-rounded {
+    font-family: 'Material Symbols Rounded' !important;
+    font-size: 20px !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
+    -webkit-font-feature-settings: 'liga' !important;
+    font-feature-settings: 'liga' !important;
+    -webkit-font-smoothing: antialiased !important;
+}
 
 /* ── BASE ── */
 html, body, .stApp {
