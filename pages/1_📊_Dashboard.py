@@ -272,7 +272,7 @@ with st.sidebar:
     st.divider()
 
     # ── Gestión de portafolios ─────────────────────────────────────
-    with st.expander("⚙️  Gestionar portafolios"):
+    with st.expander("gestionar portafolios"):
         portfolios_df = ver_portafolios(USER_ID)
 
         # Crear nuevo
@@ -386,7 +386,7 @@ else:
     st.info("Añadí operaciones o aportes para ver tu dashboard.")
 
 # ── EDITABLE CASH ──────────────────────────────────────────────────
-with st.expander("✏️  Editar efectivo disponible"):
+with st.expander("[ editar efectivo ]"):
     st.markdown(
         '<div style="color:#475569;font-size:0.82rem;margin-bottom:16px">' +
         f'Portafolio: <span style="color:#e2e8f0">{portfolio_label_sel}</span>' +

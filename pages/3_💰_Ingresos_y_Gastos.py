@@ -105,7 +105,7 @@ st.markdown(
 )
 
 # ── CATEGORÍAS (EXPANDER) ─────────────────────────────────────────
-with st.expander("⚙️  Gestionar categorías"):
+with st.expander("gestionar categorias"):
     with st.form("fc", clear_on_submit=True):
         c1, c2 = st.columns([1, 2])
         tc = c1.selectbox("Tipo", ["Ingreso", "Gasto"])
