@@ -11,6 +11,10 @@ USER_ID = st.session_state.user[0]
 
 st.set_page_config(layout="wide", page_title="Watchlist · Portfolio")
 apply_styles()
+st.markdown("""<style>
+.material-symbols-rounded,[data-testid="stNumberInputStepDown"] span,
+[data-testid="stNumberInputStepUp"] span{font-size:0!important}
+</style>""", unsafe_allow_html=True)
 
 # ── DB ────────────────────────────────────────────────────────────
 def conectar_db():

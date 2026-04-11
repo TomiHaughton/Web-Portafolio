@@ -17,6 +17,28 @@ USER_ID = st.session_state.user[0]
 
 st.set_page_config(layout="wide", page_title="Dashboard · Portfolio")
 apply_styles()
+st.markdown("""
+<style>
+/* Hide material icon text that leaks in some Streamlit versions */
+.material-symbols-rounded, [data-testid="stNumberInputStepDown"] span,
+[data-testid="stNumberInputStepUp"] span { font-size: 0 !important; }
+/* Number input styling */
+[data-testid="stNumberInput"] input {
+    background: #0f1729 !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #1e2e4a !important;
+    border-radius: 8px !important;
+    font-family: JetBrains Mono, monospace !important;
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+}
+[data-testid="stNumberInput"] button {
+    background: #1a2540 !important;
+    border: 1px solid #1e2e4a !important;
+    color: #64748b !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ── DB ────────────────────────────────────────────────────────────
 def conectar_db():
@@ -351,35 +373,10 @@ if not operaciones_df.empty or total_aportado > 0 or saldo_efectivo_usd != 0:
     with c1:
         metric_card("Valor en Acciones", f"US$ {valor_acciones_usd:,.2f}", color="default")
     with c2:
-        with st.container():
-            st.markdown('''
-                <div style="background:rgba(59,130,246,0.06);border:1px solid #1a2540;
-                border-left:3px solid #3b82f6;border-radius:12px;padding:18px 20px;min-height:90px">
-                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.4px;
-                color:#475569;font-family:JetBrains Mono,monospace;margin-bottom:6px">Efectivo USD</div>
-                ''', unsafe_allow_html=True)
-            nuevo_usd = st.number_input("usd_input", value=saldo_efectivo_usd,
-                min_value=0.0, step=0.01, format="%.2f",
-                label_visibility="collapsed", key="input_usd")
-            if nuevo_usd != saldo_efectivo_usd:
-                set_efectivo(USER_ID, nuevo_usd, saldo_efectivo_ars, portfolio_id_sel)
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+        metric_card("Efectivo USD", f"US$ {saldo_efectivo_usd:,.2f}", color="blue")
     with c3:
-        with st.container():
-            st.markdown('''
-                <div style="background:rgba(245,158,11,0.06);border:1px solid #1a2540;
-                border-left:3px solid #f59e0b;border-radius:12px;padding:18px 20px;min-height:90px">
-                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.4px;
-                color:#475569;font-family:JetBrains Mono,monospace;margin-bottom:6px">Efectivo ARS</div>
-                ''', unsafe_allow_html=True)
-            nuevo_ars = st.number_input("ars_input", value=saldo_efectivo_ars,
-                min_value=0.0, step=1.0, format="%.0f",
-                label_visibility="collapsed", key="input_ars")
-            if nuevo_ars != saldo_efectivo_ars:
-                set_efectivo(USER_ID, saldo_efectivo_usd, nuevo_ars, portfolio_id_sel)
-                st.rerun()
-            st.markdown(f'<div style="font-size:0.72rem;color:#475569;margin-top:4px;font-family:JetBrains Mono,monospace">≈ US$ {nuevo_ars/precio_dolar_hoy:,.2f}</div></div>', unsafe_allow_html=True)
+        metric_card("Efectivo ARS", f"AR$ {saldo_efectivo_ars:,.0f}",
+                    subtitle=f"≈ US$ {valor_ars_en_usd:,.2f}", color="amber")
     with c4:
         nr_color = "green" if ganancia_no_real >= 0 else "red"
         nr_sign  = "+" if ganancia_no_real >= 0 else ""
@@ -387,6 +384,30 @@ if not operaciones_df.empty or total_aportado > 0 or saldo_efectivo_usd != 0:
 
 else:
     st.info("Añadí operaciones o aportes para ver tu dashboard.")
+
+# ── EDITABLE CASH ──────────────────────────────────────────────────
+with st.expander("✏️  Editar efectivo disponible"):
+    st.markdown(
+        '<div style="color:#475569;font-size:0.82rem;margin-bottom:16px">' +
+        f'Portafolio: <span style="color:#e2e8f0">{portfolio_label_sel}</span>' +
+        '  ·  Editá el saldo directamente, se guarda al hacer clic fuera del campo.</div>',
+        unsafe_allow_html=True
+    )
+    ef1, ef2 = st.columns(2)
+    with ef1:
+        nuevo_usd = st.number_input(
+            "Efectivo USD", value=saldo_efectivo_usd,
+            min_value=0.0, step=10.0, format="%.2f", key="input_usd"
+        )
+    with ef2:
+        nuevo_ars = st.number_input(
+            "Efectivo ARS", value=saldo_efectivo_ars,
+            min_value=0.0, step=100.0, format="%.0f", key="input_ars"
+        )
+    if st.button("Guardar efectivo", key="save_efectivo"):
+        set_efectivo(USER_ID, nuevo_usd, nuevo_ars, portfolio_id_sel)
+        st.success("✓ Efectivo actualizado.")
+        st.rerun()
 
 st.divider()
 
