@@ -249,7 +249,7 @@ if not ops.empty:
     st.divider()
 
     # ── BENCHMARK COMPARISON ──────────────────────────────────────
-    section_header("Portfolio vs Benchmarks", "Rendimiento normalizado — base 100 desde tu primera operación")
+    section_header("Portfolio vs Benchmarks", "Rendimiento en % desde el período seleccionado")
 
     ops['fecha'] = pd.to_datetime(ops['fecha'])
     start_date   = ops['fecha'].min()
@@ -262,125 +262,149 @@ if not ops.empty:
     except:
         precio_dolar = 1150.0
 
-    col_bench, col_opts = st.columns([4, 1])
+    # ── Período y opciones ────────────────────────────────────────
+    ctrl_col1, ctrl_col2 = st.columns([3, 2])
 
-    with col_opts:
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        mostrar_sp  = st.checkbox("S&P 500",  value=True)
-        mostrar_ndq = st.checkbox("Nasdaq",   value=True)
-        mostrar_merv= st.checkbox("Merval",   value=False)
-        mostrar_oro = st.checkbox("Oro",      value=True)
+    with ctrl_col1:
+        periodos = {"1S": 7, "1M": 30, "3M": 90, "6M": 180, "1A": 365, "Total": None}
+        periodo_sel = st.radio(
+            "Período", list(periodos.keys()),
+            index=5, horizontal=True, label_visibility="collapsed"
+        )
+        dias = periodos[periodo_sel]
+        if dias is None:
+            bench_start = start_date
+        else:
+            bench_start = pd.Timestamp(date.today()) - pd.Timedelta(days=dias)
+            bench_start = max(bench_start, start_date)
 
-    with col_bench:
-        with st.spinner("Calculando comparación..."):
-            evolucion  = calcular_evolucion_portfolio(ops, precio_dolar)
-            benchmarks = calcular_benchmarks(start_date)
+    with ctrl_col2:
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        bc1, bc2, bc3, bc4 = st.columns(4)
+        mostrar_sp   = bc1.checkbox("S&P 500", value=True)
+        mostrar_ndq  = bc2.checkbox("Nasdaq",  value=True)
+        mostrar_merv = bc3.checkbox("Merval",  value=False)
+        mostrar_oro  = bc4.checkbox("Oro",     value=True)
 
-        if evolucion is not None and not evolucion.empty:
-            fig_bench = go.Figure()
+    with st.spinner("Calculando..."):
+        evolucion  = calcular_evolucion_portfolio(ops, precio_dolar)
+        benchmarks = calcular_benchmarks(bench_start)
 
-            # Portfolio normalizado a 100
-            port_vals = evolucion.set_index('Fecha')['Total']
+    if evolucion is not None and not evolucion.empty:
+        fig_bench = go.Figure()
+
+        # Portfolio — filtrar al período, normalizar a 0%
+        port_vals = evolucion.set_index('Fecha')['Total']
+        port_vals = port_vals[port_vals.index >= pd.Timestamp(bench_start)]
+        port_vals = port_vals.dropna()
+
+        if len(port_vals) > 0:
             base_port = port_vals.iloc[0]
             if base_port and base_port > 0:
-                port_norm = port_vals / base_port * 100
+                port_pct = (port_vals / base_port - 1) * 100
                 fig_bench.add_trace(go.Scatter(
-                    x=port_norm.index,
-                    y=port_norm.values,
+                    x=port_pct.index,
+                    y=port_pct.values,
                     name='Mi Portfolio',
                     line=dict(color='#10b981', width=2.5),
-                    hovertemplate="<b>Mi Portfolio</b><br>%{x|%d %b %Y}<br>%{y:.1f}<extra></extra>",
+                    fill='tozeroy',
+                    fillcolor='rgba(16,185,129,0.05)',
+                    hovertemplate="<b>Mi Portfolio</b><br>%{x|%d %b %Y}<br>%{y:+.2f}%<extra></extra>",
                 ))
 
-            # Benchmarks seleccionados
-            bench_config = {
-                'S&P 500': ('#3b82f6', mostrar_sp),
-                'Nasdaq':  ('#8b5cf6', mostrar_ndq),
-                'Merval':  ('#f59e0b', mostrar_merv),
-                'Oro':     ('#fbbf24', mostrar_oro),
-            }
+        # Benchmarks — también normalizados a 0% desde bench_start
+        bench_config = {
+            'S&P 500': ('#3b82f6', mostrar_sp),
+            'Nasdaq':  ('#8b5cf6', mostrar_ndq),
+            'Merval':  ('#f59e0b', mostrar_merv),
+            'Oro':     ('#fbbf24', mostrar_oro),
+        }
 
-            for nombre, (color, mostrar) in bench_config.items():
-                if not mostrar or nombre not in benchmarks: continue
-                serie = benchmarks[nombre]
-                # Alinear al rango del portfolio
-                serie = serie[serie.index >= pd.Timestamp(start_date)]
-                serie = serie.reindex(
-                    pd.date_range(start=start_date, end=date.today()),
-                    method='ffill'
-                ).dropna()
-                fig_bench.add_trace(go.Scatter(
-                    x=serie.index,
-                    y=serie.values,
-                    name=nombre,
-                    line=dict(color=color, width=1.5, dash='dot'),
-                    hovertemplate=f"<b>{nombre}</b><br>%{{x|%d %b %Y}}<br>%{{y:.1f}}<extra></extra>",
-                ))
+        for nombre, (color, mostrar) in bench_config.items():
+            if not mostrar or nombre not in benchmarks: continue
+            serie = benchmarks[nombre]
+            serie = serie[serie.index >= pd.Timestamp(bench_start)]
+            serie = serie.reindex(
+                pd.date_range(start=bench_start, end=date.today()), method='ffill'
+            ).dropna()
+            if len(serie) == 0: continue
+            # Renormalizar al período seleccionado (base 0%)
+            base_b = serie.iloc[0]
+            if base_b and base_b > 0:
+                serie_pct = (serie / base_b - 1) * 100
+            else:
+                continue
+            fig_bench.add_trace(go.Scatter(
+                x=serie_pct.index,
+                y=serie_pct.values,
+                name=nombre,
+                line=dict(color=color, width=1.5, dash='dot'),
+                hovertemplate=f"<b>{nombre}</b><br>%{{x|%d %b %Y}}<br>%{{y:+.2f}}%<extra></extra>",
+            ))
 
-            fig_bench.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="#0a0f1e",
-                font=dict(color="#64748b", family="JetBrains Mono"),
-                xaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540",
-                           tickfont=dict(color="#475569", size=10)),
-                yaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540",
-                           tickfont=dict(color="#475569", size=10),
-                           title="Base 100"),
-                legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#94a3b8", size=12)),
-                margin=dict(l=16, r=16, t=20, b=16),
-                hovermode="x unified",
-                height=420,
-                # Línea de referencia en 100
-                shapes=[dict(
-                    type='line', x0=start_date, x1=date.today(),
-                    y0=100, y1=100,
-                    line=dict(color='#1e2e4a', width=1, dash='dash')
-                )]
-            )
-            st.plotly_chart(fig_bench, use_container_width=True)
+        fig_bench.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="#0a0f1e",
+            font=dict(color="#64748b", family="JetBrains Mono"),
+            xaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540",
+                       tickfont=dict(color="#475569", size=10)),
+            yaxis=dict(gridcolor="#1a2540", zerolinecolor="#1a2540",
+                       tickfont=dict(color="#475569", size=10),
+                       ticksuffix="%", title="Rendimiento %"),
+            legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#94a3b8", size=12)),
+            margin=dict(l=16, r=16, t=20, b=16),
+            hovermode="x unified",
+            height=420,
+            shapes=[dict(
+                type='line', x0=bench_start, x1=date.today(),
+                y0=0, y1=0,
+                line=dict(color='#1e2e4a', width=1, dash='dash')
+            )]
+        )
+        st.plotly_chart(fig_bench, use_container_width=True)
 
-            # Resumen de rendimiento
-            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-            resumen_cols = st.columns(5)
-            labels_res   = ['Mi Portfolio', 'S&P 500', 'Nasdaq', 'Merval', 'Oro']
-            colores_res  = ['#10b981',      '#3b82f6', '#8b5cf6', '#f59e0b', '#fbbf24']
+        # ── Resumen tarjetas ──────────────────────────────────────
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        resumen_cols = st.columns(5)
+        labels_res  = ['Mi Portfolio', 'S&P 500', 'Nasdaq', 'Merval', 'Oro']
+        colores_res = ['#10b981',      '#3b82f6', '#8b5cf6', '#f59e0b', '#fbbf24']
 
-            for col, label, color in zip(resumen_cols, labels_res, colores_res):
-                if label == 'Mi Portfolio':
-                    if base_port and base_port > 0:
-                        rend = port_norm.dropna().iloc[-1] - 100
-                    else:
-                        rend = 0
+        for col, label, color in zip(resumen_cols, labels_res, colores_res):
+            if label == 'Mi Portfolio':
+                rend = port_pct.dropna().iloc[-1] if len(port_vals) > 0 and base_port and base_port > 0 else 0
+            else:
+                if label not in benchmarks:
+                    col.markdown(
+                        f'<div style="text-align:center;padding:12px;background:#0b1220;'
+                        f'border:1px solid #1a2540;border-radius:10px">'
+                        f'<div style="color:{color};font-size:0.7rem;font-family:JetBrains Mono,monospace">{label}</div>'
+                        f'<div style="color:#334155;font-size:0.85rem">N/D</div></div>',
+                        unsafe_allow_html=True
+                    )
+                    continue
+                s = benchmarks[label]
+                s = s[s.index >= pd.Timestamp(bench_start)].dropna()
+                if len(s) == 0:
+                    rend = 0
                 else:
-                    if label not in benchmarks:
-                        col.markdown(
-                            f'<div style="text-align:center;padding:12px;background:#0b1220;'
-                            f'border:1px solid #1a2540;border-radius:10px">'
-                            f'<div style="color:{color};font-size:0.7rem;font-family:JetBrains Mono,monospace">{label}</div>'
-                            f'<div style="color:#334155;font-size:0.85rem;font-family:JetBrains Mono,monospace">N/D</div>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-                        continue
-                    s = benchmarks[label]
-                    s = s[s.index >= pd.Timestamp(start_date)].dropna()
-                    rend = s.iloc[-1] - 100 if len(s) > 0 else 0
+                    b = s.iloc[0]
+                    rend = (s.iloc[-1] / b - 1) * 100 if b and b > 0 else 0
 
-                sign     = "+" if rend >= 0 else ""
-                r_color  = "#10b981" if rend >= 0 else "#ef4444"
-                border   = f"border-left:3px solid {color}" if label == 'Mi Portfolio' else f"border:1px solid #1a2540"
-                col.markdown(
-                    f'<div style="text-align:center;padding:12px;background:#0b1220;'
-                    f'{border};border-radius:10px">'
-                    f'<div style="color:{color};font-size:0.7rem;font-family:JetBrains Mono,monospace;'
-                    f'margin-bottom:4px">{label}</div>'
-                    f'<div style="color:{r_color};font-size:1.1rem;font-weight:500;'
-                    f'font-family:JetBrains Mono,monospace">{sign}{rend:.1f}%</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-        else:
-            st.info("Se necesitan más datos históricos para calcular la comparación.")
+            sign    = "+" if rend >= 0 else ""
+            r_color = "#10b981" if rend >= 0 else "#ef4444"
+            border  = f"border-left:3px solid {color}" if label == 'Mi Portfolio' else "border:1px solid #1a2540"
+            col.markdown(
+                f'<div style="text-align:center;padding:12px;background:#0b1220;'
+                f'{border};border-radius:10px">'
+                f'<div style="color:{color};font-size:0.7rem;font-family:JetBrains Mono,monospace;'
+                f'margin-bottom:4px">{label}</div>'
+                f'<div style="color:{r_color};font-size:1.1rem;font-weight:500;'
+                f'font-family:JetBrains Mono,monospace">{sign}{rend:.1f}%</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+    else:
+        st.info("Se necesitan más datos históricos para calcular la comparación.")
 
 else:
     st.markdown("""
