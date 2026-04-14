@@ -147,7 +147,8 @@ def calcular_benchmarks(start_date):
             # Normalizar a 100 en la fecha inicial
             base = close.iloc[0]
             if base and base > 0:
-                result[nombre] = (close / base * 100).rename(nombre)
+                # Guardamos el precio real — normalizamos a % en el gráfico según el período
+                result[nombre] = close.rename(nombre)
         except: pass
     return result
 
@@ -276,7 +277,8 @@ if not ops.empty:
             bench_start = start_date
         else:
             bench_start = pd.Timestamp(date.today()) - pd.Timedelta(days=dias)
-            bench_start = max(bench_start, start_date)
+            # NO clampeamos al start_date — los benchmarks muestran el período completo
+            # el portfolio solo aparece desde cuando tenemos datos
 
     with ctrl_col2:
         st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
@@ -288,24 +290,32 @@ if not ops.empty:
 
     with st.spinner("Calculando..."):
         evolucion  = calcular_evolucion_portfolio(ops, precio_dolar)
+        # Benchmarks desde bench_start real (puede ser antes del inicio del portfolio)
         benchmarks = calcular_benchmarks(bench_start)
 
     if evolucion is not None and not evolucion.empty:
         fig_bench = go.Figure()
 
-        # Portfolio — filtrar al período, normalizar a 0%
+        # Portfolio — siempre desde start_date (no podemos inventar datos anteriores)
         port_vals = evolucion.set_index('Fecha')['Total']
-        port_vals = port_vals[port_vals.index >= pd.Timestamp(bench_start)]
-        port_vals = port_vals.dropna()
+        # Filtramos al período pero con el inicio real del portfolio como límite inferior
+        port_start = max(pd.Timestamp(bench_start), pd.Timestamp(start_date))
+        port_vals  = port_vals[port_vals.index >= port_start].dropna()
 
+        port_pct  = None
+        base_port = None
         if len(port_vals) > 0:
             base_port = port_vals.iloc[0]
             if base_port and base_port > 0:
                 port_pct = (port_vals / base_port - 1) * 100
+                # Nota si el portfolio arranca después del período seleccionado
+                port_label = 'Mi Portfolio'
+                if pd.Timestamp(start_date) > pd.Timestamp(bench_start):
+                    port_label = f'Mi Portfolio (desde {start_date.strftime("%d %b %Y")})'
                 fig_bench.add_trace(go.Scatter(
                     x=port_pct.index,
                     y=port_pct.values,
-                    name='Mi Portfolio',
+                    name=port_label,
                     line=dict(color='#10b981', width=2.5),
                     fill='tozeroy',
                     fillcolor='rgba(16,185,129,0.05)',
@@ -371,7 +381,7 @@ if not ops.empty:
 
         for col, label, color in zip(resumen_cols, labels_res, colores_res):
             if label == 'Mi Portfolio':
-                rend = port_pct.dropna().iloc[-1] if len(port_vals) > 0 and base_port and base_port > 0 else 0
+                rend = port_pct.dropna().iloc[-1] if port_pct is not None and len(port_pct) > 0 else 0
             else:
                 if label not in benchmarks:
                     col.markdown(
