@@ -14,11 +14,35 @@ html, body, .stApp {
     background-color: #070c18 !important;
     color: #e2e8f0 !important;
 }
+
+/* Financial grid background */
+.stApp::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(16,185,129,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16,185,129,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+}
+/* Glow spots */
+.stApp::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 40% at 20% 20%, rgba(16,185,129,0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 75%, rgba(59,130,246,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
 *, p, span, div, label { font-family: 'DM Sans', sans-serif !important; }
 
-/* Hide sidebar on login */
-[data-testid="stSidebar"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
+/* Hide sidebar only on login screen — shown via JS after login */
+.hide-sidebar [data-testid="stSidebar"] { display: none !important; }
+.hide-sidebar [data-testid="collapsedControl"] { display: none !important; }
 
 h1, h2, h3 {
     font-family: 'DM Sans', sans-serif !important;
@@ -77,7 +101,7 @@ h1, h2, h3 {
 /* Divider */
 hr { border-color: #1a2540 !important; margin: 24px 0 !important; }
 
-/* Sidebar (logged in state) */
+/* Sidebar */
 [data-testid="stSidebar"] {
     background: #0b1220 !important;
     border-right: 1px solid #1a2540 !important;
@@ -154,6 +178,8 @@ if st.session_state.user:
     if not st.session_state.user[3]:
         ocultar_pagina("Admin")
 else:
+    # Hide sidebar on login screen
+    st.markdown('<style>[data-testid="stSidebar"]{display:none!important}[data-testid="collapsedControl"]{display:none!important}</style>', unsafe_allow_html=True)
     for p in ["Dashboard","Watchlist","Ingresos_y_Gastos","Análisis_Gráfico","Dividendos","Admin"]:
         ocultar_pagina(p)
 
@@ -215,14 +241,29 @@ if st.session_state.user:
 else:
     # Header
     st.markdown("""
-        <div class="fade-in" style="text-align:center;padding:48px 0 36px">
+        <div class="fade-in" style="text-align:center;padding:48px 0 28px">
+            <!-- Mini ticker tape -->
             <div style="
-                font-size:2.2rem;font-weight:800;color:#f1f5f9;
+                display:flex;justify-content:center;gap:16px;margin-bottom:28px;
+                overflow:hidden;opacity:0.5
+            ">
+                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">SPY +0.8%</span>
+                <span style="color:#334155;font-size:0.72rem">|</span>
+                <span style="color:#ef4444;font-size:0.72rem;font-family:JetBrains Mono,monospace">BTC -1.2%</span>
+                <span style="color:#334155;font-size:0.72rem">|</span>
+                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">GLD +0.3%</span>
+                <span style="color:#334155;font-size:0.72rem">|</span>
+                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">QQQ +1.1%</span>
+                <span style="color:#334155;font-size:0.72rem">|</span>
+                <span style="color:#ef4444;font-size:0.72rem;font-family:JetBrains Mono,monospace">MELI -0.4%</span>
+            </div>
+            <div style="
+                font-size:2.4rem;font-weight:800;color:#f1f5f9;
                 font-family:'DM Sans',sans-serif;letter-spacing:-1px;margin-bottom:8px
             ">Portfolio</div>
             <div style="
-                color:#334155;font-size:0.82rem;
-                font-family:'JetBrains Mono',monospace;letter-spacing:2px;
+                color:#334155;font-size:0.78rem;
+                font-family:'JetBrains Mono',monospace;letter-spacing:2.5px;
                 text-transform:uppercase
             ">Control total sobre tus inversiones</div>
         </div>
