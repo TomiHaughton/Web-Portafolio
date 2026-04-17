@@ -11,30 +11,32 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
 html, body, .stApp {
-    background-color: #070c18 !important;
+    background-color: #050a14 !important;
     color: #e2e8f0 !important;
 }
 
-/* Financial grid background */
+/* Chart silhouette background */
 .stApp::before {
     content: '';
     position: fixed;
     inset: 0;
-    background-image:
-        linear-gradient(rgba(16,185,129,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(16,185,129,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1440' height='600' viewBox='0 0 1440 600'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%2310b981' stop-opacity='0.18'/%3E%3Cstop offset='100%25' stop-color='%2310b981' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 500 L60 480 L120 490 L180 460 L240 440 L300 420 L360 400 L400 380 L440 360 L480 340 L520 300 L560 280 L600 260 L640 240 L680 220 L720 200 L760 210 L800 230 L840 250 L880 240 L920 220 L960 200 L1000 180 L1040 160 L1080 140 L1120 120 L1160 100 L1200 80 L1240 60 L1280 40 L1320 30 L1360 20 L1440 10 L1440 600 L0 600 Z' fill='url(%23g)'/%3E%3Cpath d='M0 500 L60 480 L120 490 L180 460 L240 440 L300 420 L360 400 L400 380 L440 360 L480 340 L520 300 L560 280 L600 260 L640 240 L680 220 L720 200 L760 210 L800 230 L840 250 L880 240 L920 220 L960 200 L1000 180 L1040 160 L1080 140 L1120 120 L1160 100 L1200 80 L1240 60 L1280 40 L1320 30 L1360 20 L1440 10' fill='none' stroke='%2310b981' stroke-width='1.5' stroke-opacity='0.25'/%3E%3C/svg%3E");
+    background-size: cover;
+    background-position: bottom;
+    background-repeat: no-repeat;
     pointer-events: none;
     z-index: 0;
 }
-/* Glow spots */
+
+/* Grid overlay */
 .stApp::after {
     content: '';
     position: fixed;
     inset: 0;
-    background:
-        radial-gradient(ellipse 60% 40% at 20% 20%, rgba(16,185,129,0.04) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 75%, rgba(59,130,246,0.04) 0%, transparent 70%);
+    background-image:
+        linear-gradient(rgba(16,185,129,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16,185,129,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
     pointer-events: none;
     z-index: 0;
 }
@@ -244,18 +246,18 @@ else:
         <div class="fade-in" style="text-align:center;padding:48px 0 28px">
             <!-- Mini ticker tape -->
             <div style="
-                display:flex;justify-content:center;gap:16px;margin-bottom:28px;
-                overflow:hidden;opacity:0.5
+                display:flex;justify-content:center;gap:20px;margin-bottom:32px;
+                overflow:hidden;opacity:0.75
             ">
-                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">SPY +0.8%</span>
-                <span style="color:#334155;font-size:0.72rem">|</span>
-                <span style="color:#ef4444;font-size:0.72rem;font-family:JetBrains Mono,monospace">BTC -1.2%</span>
-                <span style="color:#334155;font-size:0.72rem">|</span>
-                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">GLD +0.3%</span>
-                <span style="color:#334155;font-size:0.72rem">|</span>
-                <span style="color:#10b981;font-size:0.72rem;font-family:JetBrains Mono,monospace">QQQ +1.1%</span>
-                <span style="color:#334155;font-size:0.72rem">|</span>
-                <span style="color:#ef4444;font-size:0.72rem;font-family:JetBrains Mono,monospace">MELI -0.4%</span>
+                <span style="color:#10b981;font-size:0.9rem;font-family:JetBrains Mono,monospace;font-weight:500">SPY +0.8%</span>
+                <span style="color:#1e2e4a;font-size:0.9rem">|</span>
+                <span style="color:#ef4444;font-size:0.9rem;font-family:JetBrains Mono,monospace;font-weight:500">BTC -1.2%</span>
+                <span style="color:#1e2e4a;font-size:0.9rem">|</span>
+                <span style="color:#10b981;font-size:0.9rem;font-family:JetBrains Mono,monospace;font-weight:500">GLD +0.3%</span>
+                <span style="color:#1e2e4a;font-size:0.9rem">|</span>
+                <span style="color:#10b981;font-size:0.9rem;font-family:JetBrains Mono,monospace;font-weight:500">QQQ +1.1%</span>
+                <span style="color:#1e2e4a;font-size:0.9rem">|</span>
+                <span style="color:#ef4444;font-size:0.9rem;font-family:JetBrains Mono,monospace;font-weight:500">MELI -0.4%</span>
             </div>
             <div style="
                 font-size:2.4rem;font-weight:800;color:#f1f5f9;
