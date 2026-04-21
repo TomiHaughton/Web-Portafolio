@@ -28,7 +28,6 @@ def conectar_db():
 
 def ver_watchlist(user_id):
     conn = conectar_db()
-    # Intentamos leer la columna carpeta; si no existe aún en la DB, la ignoramos
     try:
         df = pd.read_sql_query(
             "SELECT * FROM watchlist WHERE user_id=%s ORDER BY carpeta NULLS LAST, ticker",
@@ -58,7 +57,6 @@ def anadir_a_watchlist(ticker, precio_objetivo, notas, carpeta, user_id):
             (ticker, precio_objetivo, notas, carpeta or None, user_id)
         )
     except Exception:
-        # Si la columna carpeta no existe en DB, insertar sin ella
         cursor.execute(
             "INSERT INTO watchlist (ticker, precio_objetivo, notas, user_id) VALUES (%s,%s,%s,%s)",
             (ticker, precio_objetivo, notas, user_id)
@@ -129,11 +127,11 @@ st.markdown(
 # ── ADD FORM ──────────────────────────────────────────────────────
 section_header("Agregar ticker")
 with st.form("wf", clear_on_submit=True):
-    c1, c2, c3, c4 = st.columns([1, 1, 1.5, 2])
-    tk             = c1.text_input("Ticker", placeholder="AAPL")
-    po             = c2.number_input("Precio objetivo", min_value=0.0, format="%.2f")
-    carpeta_nueva  = c3.text_input("Carpeta", placeholder="A comprar, A vender…")
-    nt             = c4.text_input("Notas", placeholder="Tesis de inversión...")
+    c1, c2 = st.columns(2)
+    tk            = c1.text_input("Ticker", placeholder="AAPL")
+    po            = c2.number_input("Precio objetivo", min_value=0.0, format="%.2f")
+    carpeta_nueva = st.text_input("Carpeta", placeholder="A comprar, A vender…")
+    nt            = st.text_input("Notas", placeholder="Tesis de inversión...")
     if st.form_submit_button("Agregar", use_container_width=True) and tk:
         tk_fin = tk.upper()
         if tk_fin in CRIPTOS: tk_fin = f"{tk_fin}-USD"
@@ -149,11 +147,10 @@ df = ver_watchlist(USER_ID)
 
 if df.empty:
     st.markdown("""
-        <div style="height:200px;display:flex;align-items:center;justify-content:center;
+        <div style="height:180px;display:flex;align-items:center;justify-content:center;
                     color:#334155;font-size:0.9rem;border:1px dashed #1a2540;border-radius:12px;
                     flex-direction:column;gap:8px">
-            <span style="font-size:1.5rem">🎯</span>
-            Tu watchlist está vacía — agregá tickers arriba
+            Tu watchlist está vacía
         </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -181,15 +178,6 @@ for carpeta_nombre in orden:
         </div>
     """, unsafe_allow_html=True)
 
-    # Column headers
-    cols_h = st.columns([1.2, 1.8, 1.4, 2.5, 1, 1, 0.8])
-    for col, lbl in zip(cols_h, ["Ticker","Precio / Rango 52s","Objetivo","Notas","P/E","Rend 7d","Acc."]):
-        col.markdown(
-            f'<span style="font-size:0.62rem;text-transform:uppercase;letter-spacing:1px;'
-            f'color:#334155;font-family:JetBrains Mono,monospace">{lbl}</span>',
-            unsafe_allow_html=True
-        )
-
     for _, r in grupo_df.iterrows():
         d      = inf.get(r['ticker'], {})
         precio = d.get('precio', 0)
@@ -202,7 +190,7 @@ for carpeta_nombre in orden:
                 'border-radius:10px;padding:16px;margin:6px 0">',
                 unsafe_allow_html=True
             )
-            ec1, ec2, ec3 = st.columns([1, 1.5, 3])
+            ec1, ec2 = st.columns(2)
             nuevo_obj = ec1.number_input(
                 "Precio objetivo", value=float(r['precio_objetivo'] or 0),
                 min_value=0.0, format="%.2f", key=f"obj_{row_id}"
@@ -210,13 +198,13 @@ for carpeta_nombre in orden:
             opciones_carp = ["Sin carpeta"] + carpetas_existentes
             if r['carpeta'] and r['carpeta'] not in opciones_carp:
                 opciones_carp.append(r['carpeta'])
-            idx = opciones_carp.index(r['carpeta']) if r['carpeta'] in opciones_carp else 0
-            carp_sel = ec2.selectbox("Carpeta existente", opciones_carp, index=idx, key=f"carp_{row_id}")
-            carp_new = ec2.text_input("O escribí una nueva", placeholder="Nueva carpeta…", key=f"carpnew_{row_id}")
-            nueva_nota = ec3.text_input("Notas", value=r['notas'] or "", key=f"nota_{row_id}")
+            idx      = opciones_carp.index(r['carpeta']) if r['carpeta'] in opciones_carp else 0
+            carp_sel = ec2.selectbox("Carpeta", opciones_carp, index=idx, key=f"carp_{row_id}")
+            carp_new = st.text_input("Nueva carpeta", placeholder="Nombre…", key=f"carpnew_{row_id}")
+            nueva_nota = st.text_input("Notas", value=r['notas'] or "", key=f"nota_{row_id}")
 
-            ba, bb, _ = st.columns([1, 1, 5])
-            if ba.button("✓ Guardar", key=f"save_{row_id}", use_container_width=True):
+            ba, bb = st.columns(2)
+            if ba.button("Guardar", key=f"save_{row_id}", use_container_width=True):
                 carpeta_final = carp_new.strip() if carp_new.strip() else (
                     None if carp_sel == "Sin carpeta" else carp_sel
                 )
@@ -229,80 +217,96 @@ for carpeta_nombre in orden:
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── MODO VISUALIZACIÓN ─────────────────────────────────────
+        # ── MODO VISUALIZACIÓN — card responsive ──────────────────
         else:
-            cols = st.columns([1.2, 1.8, 1.4, 2.5, 1, 1, 0.8])
-
-            cols[0].markdown(
-                f'<span style="color:#e2e8f0;font-family:JetBrains Mono,monospace;'
-                f'font-size:0.9rem;font-weight:500">{r["ticker"]}</span>',
-                unsafe_allow_html=True
-            )
-
-            cols[1].markdown(
-                f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.85rem">'
-                f'${precio:,.2f}</span>',
-                unsafe_allow_html=True
-            )
-            if d.get('min52') and d.get('max52') and d['max52'] > d['min52'] and precio > 0:
-                pct = max(0, min(100, int(((precio - d['min52']) / (d['max52'] - d['min52'])) * 100)))
-                cols[1].markdown(
-                    f'<div style="background:#1a2540;border-radius:3px;height:4px;margin-top:4px">'
-                    f'<div style="background:#10b981;width:{pct}%;height:4px;border-radius:3px"></div></div>'
-                    f'<div style="display:flex;justify-content:space-between;margin-top:2px">'
-                    f'<span style="color:#334155;font-size:0.6rem;font-family:JetBrains Mono,monospace">'
-                    f'${d["min52"]:,.0f}</span>'
-                    f'<span style="color:#334155;font-size:0.6rem;font-family:JetBrains Mono,monospace">'
-                    f'${d["max52"]:,.0f}</span></div>',
-                    unsafe_allow_html=True
-                )
-
-            obj = r['precio_objetivo']
-            if obj and float(obj) > 0 and precio > 0:
-                dist = ((float(obj) - precio) / precio) * 100
-                d_color = "#10b981" if dist > 0 else "#ef4444"
-                d_sign  = "+" if dist > 0 else ""
-                cols[2].markdown(
-                    f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.85rem">'
-                    f'${float(obj):,.2f}</span><br>'
-                    f'<span style="color:{d_color};font-size:0.72rem;font-family:JetBrains Mono,monospace">'
-                    f'{d_sign}{dist:.1f}% al obj.</span>',
-                    unsafe_allow_html=True
-                )
-            else:
-                cols[2].markdown('<span style="color:#334155">—</span>', unsafe_allow_html=True)
-
-            cols[3].markdown(
-                f'<span style="color:#64748b;font-size:0.82rem">{r["notas"] or "—"}</span>',
-                unsafe_allow_html=True
-            )
-
-            pe = d.get('pe')
-            cols[4].markdown(
-                f'<span style="color:#94a3b8;font-family:JetBrains Mono,monospace;font-size:0.82rem">'
-                f'{pe:.1f}x</span>' if pe else '<span style="color:#334155;font-size:0.82rem">N/A</span>',
-                unsafe_allow_html=True
-            )
-
             ren = d.get('rend')
-            if ren is not None:
-                r_color = "#10b981" if ren >= 0 else "#ef4444"
-                r_sign  = "+" if ren >= 0 else ""
-                cols[5].markdown(
-                    f'<span style="color:{r_color};font-family:JetBrains Mono,monospace;font-size:0.85rem">'
-                    f'{r_sign}{ren:.2f}%</span>',
-                    unsafe_allow_html=True
+            pe  = d.get('pe')
+            obj = r['precio_objetivo']
+
+            # Distancia al objetivo
+            dist_html = "—"
+            if obj and float(obj) > 0 and precio > 0:
+                dist      = ((float(obj) - precio) / precio) * 100
+                d_color   = "#10b981" if dist > 0 else "#ef4444"
+                d_sign    = "+" if dist > 0 else ""
+                obj_str   = f"${float(obj):,.2f}"
+                dist_html = (
+                    f'<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.88rem">{obj_str}</div>'
+                    f'<div style="color:{d_color};font-size:0.72rem;font-family:JetBrains Mono,monospace">{d_sign}{dist:.1f}% al obj.</div>'
                 )
             else:
-                cols[5].markdown('<span style="color:#334155;font-size:0.82rem">N/A</span>', unsafe_allow_html=True)
+                dist_html = '<div style="color:#334155;font-size:0.88rem">—</div>'
 
-            ba, bb = cols[6].columns(2)
-            if ba.button("✏️", key=f"edit_{row_id}", help="Editar"):
+            # Rendimiento 7d
+            if ren is not None:
+                r_color   = "#10b981" if ren >= 0 else "#ef4444"
+                r_sign    = "+" if ren >= 0 else ""
+                rend_html = f'<span style="color:{r_color};font-family:JetBrains Mono,monospace;font-size:0.85rem;font-weight:500">{r_sign}{ren:.2f}%</span>'
+            else:
+                rend_html = '<span style="color:#334155;font-size:0.82rem">N/A</span>'
+
+            # Barra 52 semanas
+            bar_html = ""
+            if d.get('min52') and d.get('max52') and d['max52'] > d['min52'] and precio > 0:
+                pct      = max(0, min(100, int(((precio - d['min52']) / (d['max52'] - d['min52'])) * 100)))
+                bar_html = (
+                    f'<div style="background:#1a2540;border-radius:3px;height:3px;margin:5px 0 2px">'
+                    f'<div style="background:#10b981;width:{pct}%;height:3px;border-radius:3px"></div></div>'
+                    f'<div style="display:flex;justify-content:space-between">'
+                    f'<span style="color:#334155;font-size:0.6rem;font-family:JetBrains Mono,monospace">${d["min52"]:,.0f}</span>'
+                    f'<span style="color:#334155;font-size:0.6rem;font-family:JetBrains Mono,monospace">${d["max52"]:,.0f}</span></div>'
+                )
+
+            notas_html = ""
+            if r['notas']:
+                notas_html = (
+                    f'<div style="color:#475569;font-size:0.78rem;margin-top:8px;'
+                    f'padding-top:8px;border-top:1px solid #1a2540">{r["notas"]}</div>'
+                )
+
+            pe_str = f"{pe:.1f}x" if pe else "N/A"
+
+            st.markdown(f"""
+                <div style="background:#0b1220;border:1px solid #1a2540;border-radius:12px;
+                            padding:14px 16px;margin:5px 0">
+                    <div style="display:flex;justify-content:space-between;
+                                align-items:center;margin-bottom:10px">
+                        <span style="color:#f1f5f9;font-family:JetBrains Mono,monospace;
+                                     font-size:1rem;font-weight:500">{r['ticker']}</span>
+                        {rend_html}
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+                        <div>
+                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
+                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
+                                        margin-bottom:2px">Precio</div>
+                            <div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;
+                                        font-size:0.88rem">${precio:,.2f}</div>
+                            {bar_html}
+                        </div>
+                        <div>
+                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
+                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
+                                        margin-bottom:2px">Objetivo</div>
+                            {dist_html}
+                        </div>
+                        <div>
+                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
+                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
+                                        margin-bottom:2px">P/E</div>
+                            <div style="color:#94a3b8;font-family:JetBrains Mono,monospace;
+                                        font-size:0.88rem">{pe_str}</div>
+                        </div>
+                    </div>
+                    {notas_html}
+                </div>
+            """, unsafe_allow_html=True)
+
+            ba, bb, _ = st.columns([1, 1, 4])
+            if ba.button("Editar", key=f"edit_{row_id}", use_container_width=True):
                 st.session_state.editando = row_id
                 st.rerun()
-            if bb.button("✕", key=f"del_{row_id}", help="Eliminar"):
+            if bb.button("Eliminar", key=f"del_{row_id}", use_container_width=True):
                 eliminar_de_watchlist(row_id, USER_ID)
                 st.cache_data.clear()
                 st.rerun()
-
-        st.markdown("<div style='height:2px;background:#0a0f1e;margin:3px 0'></div>", unsafe_allow_html=True)

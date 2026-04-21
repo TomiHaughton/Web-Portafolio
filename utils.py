@@ -233,6 +233,26 @@ hr { border-color: #1a2540 !important; margin: 28px 0 !important; }
     to   { opacity: 1; transform: translateY(0); }
 }
 section.main > div { animation: fadeUp 0.35s ease-out; }
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 768px) {
+    header[data-testid="stHeader"] { display: none !important; }
+    .main .block-container { padding: 1rem 0.75rem !important; max-width: 100% !important; }
+    [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.05rem !important; }
+    [data-testid="stMetricValue"] { font-size: 1rem !important; }
+    .stDataFrame { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+    [data-baseweb="tab"] { flex: 1 !important; text-align: center !important; }
+    .stButton > button { width: 100% !important; margin-bottom: 4px !important; }
+    [data-testid="stForm"] { padding: 16px !important; }
+    .js-plotly-plot { width: 100% !important; }
+}
+@media (max-width: 480px) {
+    h1 { font-size: 1.2rem !important; }
+    .main .block-container { padding: 0.75rem 0.5rem !important; }
+    [data-testid="stMetricValue"] { font-size: 0.95rem !important; }
+}
 </style>
 """
 
@@ -259,6 +279,29 @@ PIE_COLORS = ["#10b981","#3b82f6","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec48
 def apply_styles():
     """Inject global CSS. Call once at the top of every page."""
     st.markdown(DARK_CSS, unsafe_allow_html=True)
+
+
+def is_mobile():
+    """
+    Returns True if likely a mobile device based on query params.
+    Usage: add ?mobile=1 to URL, or use the auto-detect below.
+    """
+    try:
+        params = st.query_params
+        return params.get('mobile', '0') == '1'
+    except:
+        return False
+
+
+def responsive_columns(desktop_spec, mobile_cols=1):
+    """
+    Returns st.columns with desktop_spec on wide screens.
+    On mobile (detected via query param), stacks into single column.
+    """
+    # We can't truly detect mobile server-side in Streamlit,
+    # so we use a reasonable default — always return desktop layout
+    # but the CSS will stack them on small screens automatically
+    return st.columns(desktop_spec)
 
 
 def metric_card(label, value, subtitle=None, color="default"):
