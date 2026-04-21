@@ -576,28 +576,38 @@ if not operaciones_df.empty:
     df_hist = operaciones_df.sort_values('fecha', ascending=False).copy()
     df_hist['fecha'] = pd.to_datetime(df_hist['fecha']).dt.strftime('%Y-%m-%d')
 
-    # Header row
-    cols_h = st.columns([0.5, 1, 1.2, 0.8, 0.7, 1, 1, 0.4])
-    labels = ["ID","Fecha","Ticker","Tipo","Moneda","Cantidad","Precio",""]
-    for col, lbl in zip(cols_h, labels):
-        col.markdown(
-            f'<span style="font-size:0.65rem;text-transform:uppercase;'
-            f'letter-spacing:1px;color:#334155;font-family:JetBrains Mono,monospace">{lbl}</span>',
-            unsafe_allow_html=True
-        )
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-
     for _, row in df_hist.iterrows():
-        cols = st.columns([0.5, 1, 1.2, 0.8, 0.7, 1, 1, 0.4])
         tipo_color = "#10b981" if row['tipo'] == 'Compra' else "#ef4444"
-        cols[0].markdown(f'<span style="color:#334155;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["id"]}</span>', unsafe_allow_html=True)
-        cols[1].markdown(f'<span style="color:#64748b;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["fecha"]}</span>', unsafe_allow_html=True)
-        cols[2].markdown(f'<span style="color:#e2e8f0;font-family:JetBrains Mono,monospace;font-size:0.85rem;font-weight:500">{row["ticker"]}</span>', unsafe_allow_html=True)
-        cols[3].markdown(f'<span style="color:{tipo_color};font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["tipo"]}</span>', unsafe_allow_html=True)
-        cols[4].markdown(f'<span style="color:#64748b;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["moneda"]}</span>', unsafe_allow_html=True)
-        cols[5].markdown(f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.8rem">{row["cantidad"]:.4f}</span>', unsafe_allow_html=True)
-        cols[6].markdown(f'<span style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.8rem">${row["precio"]:,.4f}</span>', unsafe_allow_html=True)
-        if cols[7].button("✕", key=f"del_{row['id']}", help="Eliminar operación"):
+        card = (
+            '<div style="background:#0b1220;border:1px solid #1a2540;border-radius:10px;'
+            'padding:12px 16px;margin:4px 0;display:flex;justify-content:space-between;'
+            'align-items:center;flex-wrap:wrap;gap:8px">'
+            '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">'
+            '<span style="color:#f1f5f9;font-family:JetBrains Mono,monospace;font-size:0.95rem;font-weight:500">'
+            + str(row['ticker']) + '</span>'
+            '<span style="color:' + tipo_color + ';font-family:JetBrains Mono,monospace;font-size:0.82rem">'
+            + str(row['tipo']) + '</span>'
+            '<span style="color:#475569;font-family:JetBrains Mono,monospace;font-size:0.78rem">'
+            + str(row['fecha']) + '</span>'
+            '</div>'
+            '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">'
+            '<div style="text-align:right">'
+            '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace">Cantidad</div>'
+            '<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.85rem">' + f'{row["cantidad"]:.4f}' + '</div>'
+            '</div>'
+            '<div style="text-align:right">'
+            '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace">Precio</div>'
+            '<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.85rem">$' + f'{row["precio"]:,.4f}' + '</div>'
+            '</div>'
+            '<div style="text-align:right">'
+            '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace">Moneda</div>'
+            '<div style="color:#64748b;font-family:JetBrains Mono,monospace;font-size:0.85rem">' + str(row['moneda']) + '</div>'
+            '</div>'
+            '</div>'
+            '</div>'
+        )
+        col_card, col_btn = st.columns([10, 1])
+        col_card.markdown(card, unsafe_allow_html=True)
+        if col_btn.button("✕", key=f"del_{row['id']}", help="Eliminar"):
             eliminar_operacion(row['id'], USER_ID)
             st.rerun()
-        st.markdown("<div style='height:2px;background:#0f1729;margin:2px 0'></div>", unsafe_allow_html=True)

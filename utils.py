@@ -236,15 +236,16 @@ section.main > div { animation: fadeUp 0.35s ease-out; }
 
 /* ── MOBILE RESPONSIVE ── */
 @media (max-width: 768px) {
-    header[data-testid="stHeader"] { display: none !important; }
+    /* Keep sidebar toggle visible */
+    [data-testid="collapsedControl"] { display: flex !important; }
     .main .block-container { padding: 1rem 0.75rem !important; max-width: 100% !important; }
+    /* Stack columns on mobile */
     [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }
     h1 { font-size: 1.4rem !important; }
     h2 { font-size: 1.05rem !important; }
     [data-testid="stMetricValue"] { font-size: 1rem !important; }
     .stDataFrame { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
     [data-baseweb="tab"] { flex: 1 !important; text-align: center !important; }
-    .stButton > button { width: 100% !important; margin-bottom: 4px !important; }
     [data-testid="stForm"] { padding: 16px !important; }
     .js-plotly-plot { width: 100% !important; }
 }
