@@ -266,41 +266,36 @@ for carpeta_nombre in orden:
 
             pe_str = f"{pe:.1f}x" if pe else "N/A"
 
-            st.markdown(f"""
-                <div style="background:#0b1220;border:1px solid #1a2540;border-radius:12px;
-                            padding:14px 16px;margin:5px 0">
-                    <div style="display:flex;justify-content:space-between;
-                                align-items:center;margin-bottom:10px">
-                        <span style="color:#f1f5f9;font-family:JetBrains Mono,monospace;
-                                     font-size:1rem;font-weight:500">{r['ticker']}</span>
-                        {rend_html}
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-                        <div>
-                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
-                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
-                                        margin-bottom:2px">Precio</div>
-                            <div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;
-                                        font-size:0.88rem">${precio:,.2f}</div>
-                            {bar_html}
-                        </div>
-                        <div>
-                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
-                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
-                                        margin-bottom:2px">Objetivo</div>
-                            {dist_html}
-                        </div>
-                        <div>
-                            <div style="color:#475569;font-size:0.6rem;text-transform:uppercase;
-                                        letter-spacing:1px;font-family:JetBrains Mono,monospace;
-                                        margin-bottom:2px">P/E</div>
-                            <div style="color:#94a3b8;font-family:JetBrains Mono,monospace;
-                                        font-size:0.88rem">{pe_str}</div>
-                        </div>
-                    </div>
-                    {notas_html}
-                </div>
-            """, unsafe_allow_html=True)
+            # Build card HTML as a plain string (no f-string nesting issues)
+            card = (
+                '<div style="background:#0b1220;border:1px solid #1a2540;border-radius:12px;padding:14px 16px;margin:5px 0">'
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+                '<span style="color:#f1f5f9;font-family:JetBrains Mono,monospace;font-size:1rem;font-weight:500">' + str(r['ticker']) + '</span>'
+                + rend_html +
+                '</div>'
+                '<div style="display:flex;gap:16px;flex-wrap:wrap">'
+                '<div style="min-width:80px">'
+                '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:2px">Precio</div>'
+                '<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.88rem">$' + f'{precio:,.2f}' + '</div>'
+                + bar_html +
+                '</div>'
+                '<div style="min-width:80px">'
+                '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:2px">Objetivo</div>'
+                + dist_html +
+                '</div>'
+                '<div style="min-width:60px">'
+                '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:2px">P/E</div>'
+                '<div style="color:#94a3b8;font-family:JetBrains Mono,monospace;font-size:0.88rem">' + pe_str + '</div>'
+                '</div>'
+                '<div style="min-width:60px">'
+                '<div style="color:#475569;font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:2px">7d</div>'
+                + rend_html +
+                '</div>'
+                '</div>'
+                + notas_html +
+                '</div>'
+            )
+            st.markdown(card, unsafe_allow_html=True)
 
             ba, bb, _ = st.columns([1, 1, 4])
             if ba.button("Editar", key=f"edit_{row_id}", use_container_width=True):
