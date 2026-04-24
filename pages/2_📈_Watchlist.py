@@ -231,7 +231,7 @@ for carpeta_nombre in orden:
                 d_sign    = "+" if dist > 0 else ""
                 obj_str   = f"${float(obj):,.2f}"
                 dist_html = (
-                    f'<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:0.88rem">{obj_str}</div>'
+                    f'<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:1rem">{obj_str}</div>'
                     f'<div style="color:{d_color};font-size:0.72rem;font-family:JetBrains Mono,monospace">{d_sign}{dist:.1f}% al obj.</div>'
                 )
             else:
@@ -275,20 +275,20 @@ for carpeta_nombre in orden:
                 '</div>'
                 '<div style="display:flex;gap:16px;flex-wrap:wrap">'
                 '<div style="min-width:80px">'
-                '<div style="color:#475569;font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:3px">Precio</div>'
+                '<div style="color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:4px">Precio</div>'
                 '<div style="color:#cbd5e1;font-family:JetBrains Mono,monospace;font-size:1rem">$' + f'{precio:,.2f}' + '</div>'
                 + bar_html +
                 '</div>'
                 '<div style="min-width:80px">'
-                '<div style="color:#475569;font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:3px">Objetivo</div>'
+                '<div style="color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:4px">Objetivo</div>'
                 + dist_html +
                 '</div>'
                 '<div style="min-width:60px">'
-                '<div style="color:#475569;font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:3px">P/E</div>'
-                '<div style="color:#94a3b8;font-family:JetBrains Mono,monospace;font-size:0.88rem">' + pe_str + '</div>'
+                '<div style="color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:4px">P/E</div>'
+                '<div style="color:#94a3b8;font-family:JetBrains Mono,monospace;font-size:1rem">' + pe_str + '</div>'
                 '</div>'
                 '<div style="min-width:60px">'
-                '<div style="color:#475569;font-size:0.68rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:3px">7d</div>'
+                '<div style="color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace;margin-bottom:4px">7d</div>'
                 + rend_html +
                 '</div>'
                 '</div>'
