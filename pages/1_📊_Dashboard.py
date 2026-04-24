@@ -350,7 +350,7 @@ with col_date:
 st.divider()
 
 # ── METRICS ROW 1 ─────────────────────────────────────────────────
-if not operaciones_df.empty or total_aportado > 0 or saldo_efectivo_usd != 0:
+if not operaciones_df.empty or capital_neto > 0 or saldo_efectivo_usd != 0:
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         metric_card("Patrimonio Total", f"US$ {patrimonio_total:,.2f}", color="default")
