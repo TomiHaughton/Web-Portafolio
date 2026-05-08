@@ -83,7 +83,8 @@ def ver_operaciones(user_id, portfolio_id=None):
     return df
 
 def calcular_capital_neto(df_ops, precio_dolar):
-    """Capital neto = costo total compras - ingresos ventas, en USD."""
+    """Capital neto aportado = total invertido en compras (sin restar ventas).
+    Las ventas vuelven al efectivo, no reducen el capital aportado."""
     if df_ops.empty: return 0.0
     df = df_ops.copy()
     df['moneda'] = df['moneda'].fillna('USD')
@@ -92,8 +93,7 @@ def calcular_capital_neto(df_ops, precio_dolar):
         lambda r: r['monto'] / precio_dolar if r['moneda'] == 'ARS' else r['monto'], axis=1
     )
     compras = df[df['tipo']=='Compra']['monto_usd'].sum()
-    ventas  = df[df['tipo']=='Venta']['monto_usd'].sum()
-    return compras - ventas
+    return compras
 
 @st.cache_data(ttl=300)
 def obtener_dolar_argentina():
@@ -251,8 +251,9 @@ valor_ars_en_usd   = saldo_efectivo_ars / precio_dolar_hoy
 patrimonio_total   = valor_acciones_usd + saldo_efectivo_usd + valor_ars_en_usd
 ganancia_no_real   = posiciones_df['ganancia_no_realizada_usd'].sum() if 'ganancia_no_realizada_usd' in posiciones_df.columns else 0
 beneficio_total    = ganancia_no_real + ganancia_realizada_total
-capital_neto       = calcular_capital_neto(operaciones_df, precio_dolar_hoy)
-rentabilidad       = (beneficio_total / capital_neto * 100) if capital_neto > 0 else 0
+capital_neto, total_invertido = calcular_capital_neto(operaciones_df, precio_dolar_hoy)
+# Rentabilidad sobre total invertido (no sobre neto), que es la forma correcta
+rentabilidad       = (beneficio_total / total_invertido * 100) if total_invertido > 0 else 0
 
 # ── SIDEBAR ───────────────────────────────────────────────────────
 with st.sidebar:
