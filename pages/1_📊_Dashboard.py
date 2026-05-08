@@ -83,17 +83,21 @@ def ver_operaciones(user_id, portfolio_id=None):
     return df
 
 def calcular_capital_neto(df_ops, precio_dolar):
-    """Capital neto aportado = total invertido en compras (sin restar ventas).
-    Las ventas vuelven al efectivo, no reducen el capital aportado."""
-    if df_ops.empty: return 0.0
+    """
+    Retorna (capital_neto, total_compras_usd).
+    capital_neto    = compras - ventas (cash neto deployado).
+    total_compras   = total invertido, base para rentabilidad real.
+    """
+    if df_ops.empty: return 0.0, 0.0
     df = df_ops.copy()
     df['moneda'] = df['moneda'].fillna('USD')
-    df['monto'] = df['cantidad'] * df['precio']
+    df['monto']  = df['cantidad'] * df['precio']
     df['monto_usd'] = df.apply(
         lambda r: r['monto'] / precio_dolar if r['moneda'] == 'ARS' else r['monto'], axis=1
     )
     compras = df[df['tipo']=='Compra']['monto_usd'].sum()
-    return compras
+    ventas  = df[df['tipo']=='Venta']['monto_usd'].sum()
+    return compras - ventas, compras
 
 @st.cache_data(ttl=300)
 def obtener_dolar_argentina():
