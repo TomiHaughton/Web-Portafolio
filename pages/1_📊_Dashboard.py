@@ -534,7 +534,8 @@ with st.form("operacion_form", clear_on_submit=True):
             tk = ticker_op.upper()
             if tk in CRIPTOS: tk = f"{tk}-USD"
             anadir_operacion(fecha_op, tk, tipo_op, cantidad_op, precio_op, moneda_op, USER_ID, pf_sel_id)
-            st.success(f"✓ Operación registrada — {tipo_op} {cantidad_op:.4f} {tk} → {pf_sel_label}")
+            pf_label_show = pf_sel_label if "pf_sel_label" in dir() else "Sin portafolio"
+            st.success(f"✓ Operación registrada — {tipo_op} {cantidad_op:.4f} {tk} → {pf_label_show}")
             st.rerun()
 
 st.divider()
