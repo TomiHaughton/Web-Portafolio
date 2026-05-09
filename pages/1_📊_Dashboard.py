@@ -256,7 +256,9 @@ patrimonio_total   = valor_acciones_usd + saldo_efectivo_usd + valor_ars_en_usd
 ganancia_no_real   = posiciones_df['ganancia_no_realizada_usd'].sum() if 'ganancia_no_realizada_usd' in posiciones_df.columns else 0
 beneficio_total    = ganancia_no_real + ganancia_realizada_total
 capital_neto, total_invertido = calcular_capital_neto(operaciones_df, precio_dolar_hoy)
-# Rentabilidad sobre total invertido (no sobre neto), que es la forma correcta
+# Capital aportado real = costo de posiciones abiertas (plata tuya que está en el mercado ahora)
+capital_aportado   = posiciones_df['coste_usd'].sum() if not posiciones_df.empty and 'coste_usd' in posiciones_df.columns else 0
+# Rentabilidad sobre total invertido históricamente
 rentabilidad       = (beneficio_total / total_invertido * 100) if total_invertido > 0 else 0
 
 # ── SIDEBAR ───────────────────────────────────────────────────────
@@ -364,7 +366,8 @@ if not operaciones_df.empty or saldo_efectivo_usd != 0 or saldo_efectivo_ars != 
         b_sign  = "+" if beneficio_total >= 0 else ""
         metric_card("Beneficio Total", f"{b_sign}US$ {abs(beneficio_total):,.2f}", color=b_color)
     with c3:
-        metric_card("Capital Neto Aportado", f"US$ {capital_neto:,.2f}", color="blue")
+        metric_card("Capital Aportado", f"US$ {capital_aportado:,.2f}",
+                    subtitle=f"Costo de posiciones abiertas", color="blue")
     with c4:
         r_color = "green" if rentabilidad >= 0 else "red"
         r_sign  = "+" if rentabilidad >= 0 else ""
