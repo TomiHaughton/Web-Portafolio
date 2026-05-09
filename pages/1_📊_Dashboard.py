@@ -257,7 +257,7 @@ ganancia_no_real   = posiciones_df['ganancia_no_realizada_usd'].sum() if 'gananc
 beneficio_total    = ganancia_no_real + ganancia_realizada_total
 capital_neto, total_invertido = calcular_capital_neto(operaciones_df, precio_dolar_hoy)
 # Capital aportado real = costo de posiciones abiertas (plata tuya que está en el mercado ahora)
-capital_aportado   = posiciones_df['coste_usd'].sum() if not posiciones_df.empty and 'coste_usd' in posiciones_df.columns else 0
+capital_aportado   = posiciones_df['coste_total_usd'].sum() if not posiciones_df.empty and 'coste_total_usd' in posiciones_df.columns else 0
 # Rentabilidad sobre total invertido históricamente
 rentabilidad       = (beneficio_total / total_invertido * 100) if total_invertido > 0 else 0
 
