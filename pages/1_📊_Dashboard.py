@@ -147,8 +147,13 @@ def calcular_posiciones(df_ops, precio_dolar):
         if r['cantidad_acumulada_compras'] > 0 else 0, axis=1
     )
     pos['ganancia_realizada'] = pos['total_ventas'] - (pos['ppp_original'] * pos['cantidad_vendida'])
-    ganancia_realizada_usd = pos['ganancia_realizada'].sum()
-    beneficios_df = pos[['ticker','ganancia_realizada']].copy()
+    # Convertir ganancia realizada a USD según moneda de cada ticker
+    pos['ganancia_realizada_usd'] = pos.apply(
+        lambda r: r['ganancia_realizada'] / precio_dolar if r['moneda'] == 'ARS' else r['ganancia_realizada'],
+        axis=1
+    )
+    ganancia_realizada_usd = pos['ganancia_realizada_usd'].sum()
+    beneficios_df = pos[['ticker','ganancia_realizada_usd']].rename(columns={'ganancia_realizada_usd':'ganancia_realizada'}).copy()
 
     abiertas = pos[pos['cantidad_total'] > 0.000001].copy()
     if not abiertas.empty:
