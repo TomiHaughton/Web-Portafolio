@@ -392,7 +392,7 @@ if not operaciones_df.empty or saldo_efectivo_usd != 0 or saldo_efectivo_ars != 
                     subtitle=f"≈ US$ {valor_ars_en_usd:,.2f}", color="amber")
     with c4:
         nr_color = "green" if ganancia_no_real >= 0 else "red"
-        nr_sign  = "+" if ganancia_no_real >= 0 else ""
+        nr_sign  = "+" if ganancia_no_real >= 0 else "-"
         metric_card("No Realizado", f"{nr_sign}US$ {abs(ganancia_no_real):,.2f}", color=nr_color)
 
 else:
