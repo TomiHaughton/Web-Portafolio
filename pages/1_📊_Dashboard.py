@@ -368,7 +368,7 @@ if not operaciones_df.empty or saldo_efectivo_usd != 0 or saldo_efectivo_ars != 
         metric_card("Patrimonio Total", f"US$ {patrimonio_total:,.2f}", color="default")
     with c2:
         b_color = "green" if beneficio_total >= 0 else "red"
-        b_sign  = "+" if beneficio_total >= 0 else ""
+        b_sign  = "+" if beneficio_total >= 0 else "-"
         metric_card("Beneficio Total", f"{b_sign}US$ {abs(beneficio_total):,.2f}", color=b_color)
     with c3:
         metric_card("Capital Aportado", f"US$ {capital_aportado:,.2f}",
