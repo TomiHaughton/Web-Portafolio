@@ -300,18 +300,22 @@ with st.sidebar:
         if not portfolios_df.empty:
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             for _, pf in portfolios_df.iterrows():
-                with st.expander(f"📁 {pf['nombre']}"):
-                    with st.form(f"edit_pf_{pf['id']}", clear_on_submit=False):
-                        e_nombre = st.text_input("Nombre", value=pf['nombre'], key=f"en_{pf['id']}")
-                        e_desc   = st.text_input("Descripción", value=pf['descripcion'] or "", key=f"ed_{pf['id']}")
-                        c_save, c_del = st.columns(2)
-                        if c_save.form_submit_button("Guardar"):
-                            renombrar_portafolio(pf['id'], e_nombre, e_desc, USER_ID)
-                            st.rerun()
-                        if c_del.form_submit_button("Eliminar", type="primary"):
-                            eliminar_portafolio(pf['id'], USER_ID)
-                            st.session_state['portfolio_label'] = "Todos (consolidado)"
-                            st.rerun()
+                st.markdown(
+                    f'<div style="color:#94a3b8;font-size:0.82rem;font-family:JetBrains Mono,monospace;'
+                    f'padding:4px 0;border-bottom:1px solid #1a2540">📁 {pf["nombre"]}</div>',
+                    unsafe_allow_html=True
+                )
+                with st.form(f"edit_pf_{pf['id']}", clear_on_submit=False):
+                    e_nombre = st.text_input("Nombre", value=pf['nombre'], key=f"en_{pf['id']}")
+                    e_desc   = st.text_input("Descripción", value=pf['descripcion'] or "", key=f"ed_{pf['id']}")
+                    c_save, c_del = st.columns(2)
+                    if c_save.form_submit_button("Guardar"):
+                        renombrar_portafolio(pf['id'], e_nombre, e_desc, USER_ID)
+                        st.rerun()
+                    if c_del.form_submit_button("Eliminar"):
+                        eliminar_portafolio(pf['id'], USER_ID)
+                        st.session_state['portfolio_label'] = "Todos (consolidado)"
+                        st.rerun()
 
     st.divider()
 
