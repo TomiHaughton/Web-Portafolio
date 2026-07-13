@@ -1,6 +1,6 @@
-streamlit==1.45.1
-pandas==2.2.3
-yfinance==0.2.51
-plotly==5.24.1
-requests==2.32.3
-psycopg2-binary==2.9.10
+streamlit
+pandas
+yfinance
+plotly
+requests
+psycopg2-binary
