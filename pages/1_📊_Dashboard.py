@@ -93,11 +93,24 @@ def calcular_capital_neto(df_ops, precio_dolar):
     df['moneda'] = df['moneda'].fillna('USD')
     df['monto']  = df['cantidad'] * df['precio']
     df['monto_usd'] = df.apply(
-        lambda r: r['monto'] / precio_dolar if r['moneda'] == 'ARS' else r['monto'], axis=1
+        lambda r: r['monto'] / precio_dolar if r['moneda'] == 'ARS'
+        else (r['monto'] * eur_usd_hoy if r['moneda'] == 'EUR'
+        else r['monto']), axis=1
     )
     compras = df[df['tipo']=='Compra']['monto_usd'].sum()
     ventas  = df[df['tipo']=='Venta']['monto_usd'].sum()
     return compras - ventas, compras
+
+@st.cache_data(ttl=300)
+def obtener_tipo_cambio_eur():
+    """Obtiene el tipo de cambio EUR/USD en tiempo real."""
+    try:
+        hist = yf.Ticker("EURUSD=X").history(period="1d")
+        if not hist.empty:
+            return float(hist['Close'].iloc[-1])
+    except:
+        pass
+    return 1.08  # fallback aproximado
 
 @st.cache_data(ttl=300)
 def obtener_dolar_argentina():
@@ -149,7 +162,9 @@ def calcular_posiciones(df_ops, precio_dolar):
     pos['ganancia_realizada'] = pos['total_ventas'] - (pos['ppp_original'] * pos['cantidad_vendida'])
     # Convertir ganancia realizada a USD según moneda de cada ticker
     pos['ganancia_realizada_usd'] = pos.apply(
-        lambda r: r['ganancia_realizada'] / precio_dolar if r['moneda'] == 'ARS' else r['ganancia_realizada'],
+        lambda r: r['ganancia_realizada'] / precio_dolar if r['moneda'] == 'ARS'
+        else (r['ganancia_realizada'] * eur_usd_hoy if r['moneda'] == 'EUR'
+        else r['ganancia_realizada']),
         axis=1
     )
     ganancia_realizada_usd = pos['ganancia_realizada_usd'].sum()
@@ -162,11 +177,16 @@ def calcular_posiciones(df_ops, precio_dolar):
 
         def val_usd(row):
             v = row['cantidad_total'] * row['precio_actual']
-            return v / precio_dolar if row['moneda'] == 'ARS' and row['precio_actual'] != 0 else v
+            if row['precio_actual'] == 0: return v
+            if row['moneda'] == 'ARS': return v / precio_dolar
+            if row['moneda'] == 'EUR': return v * eur_usd_hoy
+            return v
 
         def coste_usd(row):
-            c = row['cantidad_total'] * row['ppp_original']
-            return c / precio_dolar if row['moneda'] == 'ARS' else c
+            c_val = row['cantidad_total'] * row['ppp_original']
+            if row['moneda'] == 'ARS': return c_val / precio_dolar
+            if row['moneda'] == 'EUR': return c_val * eur_usd_hoy
+            return c_val
 
         abiertas['valor_mercado_usd']       = abiertas.apply(val_usd, axis=1)
         abiertas['coste_total_usd']         = abiertas.apply(coste_usd, axis=1)
@@ -247,6 +267,7 @@ def calcular_evolucion_patrimonio(df_ops, precio_dolar):
 
 # ── LOAD DATA ─────────────────────────────────────────────────────
 precio_dolar_hoy, fuente_dolar = obtener_dolar_argentina()
+eur_usd_hoy = obtener_tipo_cambio_eur()
 
 # Portfolio selector runs first (sets session_state)
 portfolio_id_sel, portfolio_label_sel = portfolio_selector_sidebar(USER_ID)
@@ -281,6 +302,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.metric("Dólar Cripto", f"${precio_dolar_hoy:,.0f} ARS")
     st.caption(f"Fuente: {fuente_dolar}")
+    st.metric("EUR/USD", f"${eur_usd_hoy:,.4f}")
     st.divider()
 
     # ── Gestión de portafolios ─────────────────────────────────────

@@ -50,7 +50,7 @@ def obtener_precios(tickers):
         return yf.Tickers(" ".join(tickers)).history(period='1d')['Close'].iloc[-1].to_dict()
     except: return {}
 
-def calcular(df_ops, precio_dolar=1150.0):
+def calcular(df_ops, precio_dolar=1150.0, eur_usd=1.08):
     if df_ops.empty: return pd.DataFrame(), pd.DataFrame()
     df = df_ops.copy()
     if 'moneda' not in df.columns: df['moneda'] = 'USD'
@@ -70,7 +70,9 @@ def calcular(df_ops, precio_dolar=1150.0):
     pos['realizado_nativo'] = pos['total_ventas'] - (pos['ppp'] * pos['cant_ventas'])
     # Convertir a USD según moneda
     pos['realizado'] = pos.apply(
-        lambda r: r['realizado_nativo'] / precio_dolar if r['moneda'] == 'ARS' else r['realizado_nativo'],
+        lambda r: r['realizado_nativo'] / precio_dolar if r['moneda'] == 'ARS'
+        else (r['realizado_nativo'] * eur_usd if r['moneda'] == 'EUR'
+        else r['realizado_nativo']),
         axis=1
     )
 
@@ -79,10 +81,14 @@ def calcular(df_ops, precio_dolar=1150.0):
         precios = obtener_precios(abiertas['ticker'].unique().tolist())
         abiertas['precio']        = abiertas['ticker'].map(precios).fillna(0)
         abiertas['valor_usd']     = abiertas.apply(
-            lambda x: (x['cant']*x['precio'])/1150 if x['moneda']=='ARS' else x['cant']*x['precio'], axis=1
+            lambda x: (x['cant']*x['precio'])/precio_dolar if x['moneda']=='ARS'
+            else (x['cant']*x['precio']*eur_usd if x['moneda']=='EUR'
+            else x['cant']*x['precio']), axis=1
         )
         abiertas['coste_usd']     = abiertas.apply(
-            lambda x: (x['cant']*x['ppp'])/1150 if x['moneda']=='ARS' else x['cant']*x['ppp'], axis=1
+            lambda x: (x['cant']*x['ppp'])/precio_dolar if x['moneda']=='ARS'
+            else (x['cant']*x['ppp']*eur_usd if x['moneda']=='EUR'
+            else x['cant']*x['ppp']), axis=1
         )
         abiertas['ganancia_no_real'] = abiertas['valor_usd'] - abiertas['coste_usd']
     return abiertas, pos[['ticker','realizado']]
@@ -170,7 +176,7 @@ st.markdown(
 
 ops = ver_operaciones(USER_ID, portfolio_id_sel)
 
-# Obtener dólar para conversiones ARS
+# Obtener tipos de cambio para conversiones
 try:
     import requests as _req
     _r = _req.get("https://dolarapi.com/v1/dolares/cripto", timeout=5)
@@ -178,7 +184,14 @@ try:
 except:
     precio_dolar_analisis = 1150.0
 
-abiertas, realizadas = calcular(ops, precio_dolar_analisis)
+try:
+    import yfinance as _yf
+    _eur = _yf.Ticker("EURUSD=X").history(period="1d")
+    eur_usd_analisis = float(_eur['Close'].iloc[-1]) if not _eur.empty else 1.08
+except:
+    eur_usd_analisis = 1.08
+
+abiertas, realizadas = calcular(ops, precio_dolar_analisis, eur_usd_analisis)
 
 if not ops.empty:
     # ── SUMMARY METRICS ───────────────────────────────────────────
