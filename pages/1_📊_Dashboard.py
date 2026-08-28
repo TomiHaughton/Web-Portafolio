@@ -539,7 +539,7 @@ with st.form("operacion_form", clear_on_submit=True):
     with c1: fecha_op    = st.date_input("Fecha", value=date.today())
     with c2: ticker_op   = st.text_input("Ticker", placeholder="AAPL")
     with c3: tipo_op     = st.selectbox("Tipo", ["Compra", "Venta"])
-    with c4: moneda_op   = st.selectbox("Moneda", ["USD", "ARS"])
+    with c4: moneda_op   = st.selectbox("Moneda", ["USD", "ARS", "EUR"])
     with c5: cantidad_op = st.number_input("Cantidad", min_value=0.0, step=0.0001, format="%.4f")
 
     pf_col, precio_col = st.columns([1, 2])
